@@ -79,7 +79,6 @@ python -c "import sys,torch; print('Python', sys.version); print('Torch', torch.
 # ==========================================
 
 # --- Stage 1: Pretrain Encoder ---
-# Trains the Transformer to map trials -> omega using supervised regression
 echo "[Stage 1] Pretraining Encoder..."
 srun --cpu-bind=cores python pipeline_transformer_snpe.py \
   --stage pretrain \
@@ -87,7 +86,6 @@ srun --cpu-bind=cores python pipeline_transformer_snpe.py \
   --epochs ${EPOCHS}
 
 # --- Stage 2: Train SNPE ---
-# Generates simulations (Round 1 + 2), embeds them, and trains the flow
 echo "[Stage 2] Training SNPE (density=${DENSITY})..."
 srun --cpu-bind=cores python pipeline_transformer_snpe.py \
   --stage snpe \
@@ -96,7 +94,6 @@ srun --cpu-bind=cores python pipeline_transformer_snpe.py \
   --density ${DENSITY}
 
 # --- Stage 3: Recovery Check ---
-# Checks how well the model recovers known ground-truth parameters
 echo "[Stage 3] Running Recovery Sweep (K=${REC_K})..."
 srun --cpu-bind=cores python pipeline_transformer_snpe.py \
   --stage recover \
@@ -104,7 +101,6 @@ srun --cpu-bind=cores python pipeline_transformer_snpe.py \
   --num_post ${REC_NUM_POST}
 
 # --- Stage 4: Inference on Real Data ---
-# Loops through the specified folder and estimates posteriors for subjects
 if [[ -n "${SST_FOLDER}" && -d "${SST_FOLDER}" ]]; then
   echo "[Stage 4] Processing Real Data in: ${SST_FOLDER}"
   srun --cpu-bind=cores python pipeline_transformer_snpe.py \
@@ -116,4 +112,26 @@ else
   echo "[Stage 4] Skipped (SST_FOLDER not set or invalid)"
 fi
 
+# ==========================================
+# SAVE RESULTS
+# ==========================================
+
+echo "Saving results to ${SLURM_SUBMIT_DIR}..."
+
+if [ -d "artifacts_sbi_txf" ]; then
+    cp -r artifacts_sbi_txf "${SLURM_SUBMIT_DIR}/"
+    echo "Results saved."
+else
+    echo "Warning: artifacts_sbi_txf directory not found!"
+fi
+
+# ==========================================
+# NO CLEANUP (As requested)
+# ==========================================
+# echo "Cleaning up scratch directory..."
+# rm -rf "${SCRATCH_DIRECTORY}"
+
 echo "Job completed successfully."
+echo "Scratch directory preserved at: ${SCRATCH_DIRECTORY}"
+
+exit 0

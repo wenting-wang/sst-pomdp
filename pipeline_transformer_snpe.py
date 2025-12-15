@@ -5,19 +5,48 @@ End-to-end SBI with a Transformer-based summary for the POMDP-SST simulator.
 
 Workflow:
 1) Round-1: Simulate pairs of (omega, trials).
-2) Pretrain: Train a small Transformer encoder to map trials -> embedding,
-   using supervised regression to predict transformed-omega (MSE).
-3) Freeze Encoder: Generate embeddings for Round-1 simulations and fit a z-score standardizer.
+2) Pretrain: Train a small Transformer encoder to map trials -> embedding.
+3) Freeze Encoder: Generate embeddings and fit a z-score standardizer.
 4) Train SNPE: Train Neural Spline Flow (NSF) posterior on (omega, embedding_z).
-5) Round-2 (Optional): Sample from proposal (mixture of prior & posterior_1), simulate,
-   encode, standardize, merge with Round-1, and retrain final posterior.
+5) Round-2 (Active Learning): Sample from proposal, simulate, and retrain.
 6) Inference: Condition on observed data to sample the posterior.
 
-Requirements:
-  pip install sbi torch numpy pandas
-Assumes:
-  from pomdp import POMDP
-  simulate_data(params) returns a DataFrame with columns ["result","rt","ssd"].
+================================================================================
+USAGE EXAMPLES
+================================================================================
+
+--- A. SMOKE TEST (Fast Debugging) ---
+Use these commands to verify the pipeline works without waiting hours.
+
+# 1. Pretrain Encoder (Quick: 500 sims, 2 epochs)
+python pipeline_transformer_snpe.py --stage pretrain --n1_pre 500 --epochs 2
+
+# 2. Train SNPE (Light: MAF density, small N)
+python pipeline_transformer_snpe.py --stage snpe --n1_pre 500 --n2 200 --density maf
+
+# 3. Recovery Check (5 test cases)
+python pipeline_transformer_snpe.py --stage recover --K 5 --num_post 500
+
+
+--- B. REAL RUN (Production) ---
+Use these commands for final analysis. WARNING: Heavy computation.
+
+# 1. Pretrain Encoder (Deep: 30k sims, 8 epochs)
+python pipeline_transformer_snpe.py --stage pretrain --n1_pre 30000 --epochs 8
+
+# 2. Train SNPE (Heavy: NSF density, 50k total sims)
+python pipeline_transformer_snpe.py --stage snpe --n1_pre 30000 --n2 20000 --density nsf
+
+# 3. Full Recovery Sweep (200 test cases)
+python pipeline_transformer_snpe.py --stage recover --K 200 --num_post 4000
+
+# 4. Inference on Real Data (All subjects)
+python pipeline_transformer_snpe.py --stage posterior \
+  --sst_folder "/home/wwang/data/sst_valid_raw" \
+  --glob_pat "NDAR_*.csv.zip" \
+  --num_samples 10000
+
+================================================================================
 """
 
 import os
@@ -29,6 +58,7 @@ import warnings
 import glob
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional, Callable
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -39,17 +69,19 @@ from torch.utils.data import Dataset, DataLoader
 from sbi.inference import SNPE
 from sbi.utils import BoxUniform
 
-# Assumes a local preprocessing module exists
+# Local modules
 try:
     from preprocessing import preprocessing
+    from pomdp import POMDP
 except ImportError:
-    # Fallback or placeholder if module is missing during linting
+    # Placeholder for linting/testing without local modules
     def preprocessing(fp): raise NotImplementedError("preprocessing module missing")
+    class POMDP: pass 
 
-# -----------------------------
-# 0) Model-specific Configuration
-# -----------------------------
 
+# --- Configuration ---
+
+# Parameter Ranges
 PARAM_RANGES = {
     "q_d_n": (0.0, 1.0),
     "q_d":   (0.5, 1.0),
@@ -72,28 +104,24 @@ FIXED_PARAMS = {
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
 
 # Artifact Paths
-ART_DIR = "artifacts_sbi_txf"
-ENC_PATH = os.path.join(ART_DIR, "encoder.pt")
-STD_MEAN_PATH = os.path.join(ART_DIR, "embeds_mean.npy")
-STD_STD_PATH = os.path.join(ART_DIR, "embeds_std.npy")
-POST1_PATH = os.path.join(ART_DIR, "posterior_round1.pkl")
-POSTF_PATH = os.path.join(ART_DIR, "posterior_final.pkl")
+ART_DIR = Path("artifacts_sbi_txf")
+ENC_PATH = ART_DIR / "encoder.pt"
+STD_MEAN_PATH = ART_DIR / "embeds_mean.npy"
+STD_STD_PATH = ART_DIR / "embeds_std.npy"
+POST1_PATH = ART_DIR / "posterior_round1.pkl"
+POSTF_PATH = ART_DIR / "posterior_final.pkl"
+RECOVERY_CSV = ART_DIR / "recovery_details.csv"
+POST_SUMMARY_CSV = ART_DIR / "posterior_summary_all.csv"
 
 
-# -----------------------------
-# 1) Simulator Wrapper
-# -----------------------------
+# --- 1. Simulator Wrapper ---
 
 def simulate_data(params: Dict[str, float], rate_stop_trial=1/6, seed: Optional[int] = None) -> pd.DataFrame:
-    """
-    Runs the POMDP simulator for a single parameter set.
-    """
+    """Runs the POMDP simulator for a single parameter set."""
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
-    
-    from pomdp import POMDP  # Local import to keep file standalone
     
     pomdp = POMDP(**params, rate_stop_trial=rate_stop_trial)
     pomdp.value_iteration_tensor()
@@ -101,9 +129,7 @@ def simulate_data(params: Dict[str, float], rate_stop_trial=1/6, seed: Optional[
     return pd.DataFrame(arr, columns=["result", "rt", "ssd"])
 
 
-# -----------------------------
-# 2) Parameter Transforms (Omega)
-# -----------------------------
+# --- 2. Parameter Transforms ---
 
 def make_box_prior() -> Tuple[BoxUniform, torch.Tensor, torch.Tensor]:
     """Constructs the SBI BoxUniform prior based on configured ranges."""
@@ -122,9 +148,7 @@ def make_box_prior() -> Tuple[BoxUniform, torch.Tensor, torch.Tensor]:
 
 
 def untransform(omega_vec: torch.Tensor) -> Dict[str, float]:
-    """
-    Converts a tensor in the transformed (log) space back to the original dictionary parameter space.
-    """
+    """Converts transformed (log) parameters back to original space."""
     vals = omega_vec.detach().cpu().numpy().astype(float)
     out = {}
     for i, k in enumerate(PARAM_ORDER):
@@ -136,9 +160,7 @@ def untransform(omega_vec: torch.Tensor) -> Dict[str, float]:
     return out
 
 
-# -----------------------------
-# 3) Feature Engineering
-# -----------------------------
+# --- 3. Feature Engineering ---
 
 def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
     """
@@ -148,7 +170,7 @@ def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
     N = len(df)
     idx_map = {k: i for i, k in enumerate(RESULT_LEVELS)}
 
-    # Current trial features
+    # Current trial features (One-Hot)
     oh = np.zeros((N, len(RESULT_LEVELS)), dtype=np.float32)
     res = df["result"].astype(str).values
     for t, r in enumerate(res):
@@ -158,21 +180,16 @@ def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
     rt = pd.to_numeric(df["rt"], errors="coerce").values.astype(np.float32)
     ssd = pd.to_numeric(df["ssd"], errors="coerce").values.astype(np.float32)
     
-    # Missing value indicators
+    # Missing value indicators & fill
     rt_nan = np.isnan(rt).astype(np.float32)
     ssd_nan = np.isnan(ssd).astype(np.float32)
-    
-    # Fill NaNs
     rt = np.nan_to_num(rt, nan=0.0)
     ssd = np.nan_to_num(ssd, nan=0.0)
 
     # Lag-1 features
-    prev_oh = np.roll(oh, 1, axis=0)
-    prev_oh[0, :] = 0.0
-    prev_rt = np.roll(rt, 1)
-    prev_rt[0] = 0.0
-    prev_ssd = np.roll(ssd, 1)
-    prev_ssd[0] = 0.0
+    prev_oh = np.roll(oh, 1, axis=0); prev_oh[0, :] = 0.0
+    prev_rt = np.roll(rt, 1); prev_rt[0] = 0.0
+    prev_ssd = np.roll(ssd, 1); prev_ssd[0] = 0.0
     delta_ssd = ssd - prev_ssd
 
     cols = [
@@ -184,13 +201,10 @@ def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
         t_idx = np.linspace(-1.0, 1.0, N, dtype=np.float32)[:, None]
         cols.append(t_idx)
 
-    X = np.concatenate(cols, axis=1).astype(np.float32)  # Shape: (N, F)
-    return X
+    return np.concatenate(cols, axis=1).astype(np.float32)
 
 
-# -----------------------------
-# 4) Transformer Encoder
-# -----------------------------
+# --- 4. Transformer Encoder ---
 
 class SinusoidalPE(nn.Module):
     """Sinusoidal Positional Encoding."""
@@ -209,9 +223,7 @@ class SinusoidalPE(nn.Module):
 
 
 class TrialTransformer(nn.Module):
-    """
-    A lightweight Transformer encoder + mean pooling to generate simulation embeddings.
-    """
+    """Lightweight Transformer encoder + mean pooling."""
     def __init__(self, in_dim: int, model_dim: int = 64, nhead: int = 4, nlayers: int = 2,
                  dropout: float = 0.1, out_dim: int = 32, use_pos_enc: bool = True):
         super().__init__()
@@ -231,334 +243,241 @@ class TrialTransformer(nn.Module):
         )
 
     def forward(self, x):
-        # x shape: (Batch, Trials, Features)
         h = self.proj(x)
         if self.use_pos:
             h = self.pe(h)
         h = self.encoder(h)
-        h = h.mean(dim=1)  # Mean pool over trials
-        z = self.head(h)   # Embedding
-        return z
+        h = h.mean(dim=1)  # Mean pool
+        return self.head(h)
 
 
-# -----------------------------
-# 5) Encoder Training (Supervised)
-# -----------------------------
+# --- 5. Training Utils ---
 
 class OmegaDataset(Dataset):
     def __init__(self, X_list: List[np.ndarray], omega_list: List[np.ndarray]):
         self.X = [torch.tensor(x, dtype=torch.float32) for x in X_list]
         self.Y = [torch.tensor(y, dtype=torch.float32) for y in omega_list]
 
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, i):
-        return self.X[i], self.Y[i]
+    def __len__(self): return len(self.X)
+    def __getitem__(self, i): return self.X[i], self.Y[i]
 
 
-def train_encoder_on_simulations(X_list: List[np.ndarray],
-                                 omega_list: List[np.ndarray],
-                                 in_dim: int,
-                                 omega_dim: int,
-                                 model_dim: int = 64,
-                                 out_dim: int = 64,
-                                 nhead: int = 4,
-                                 nlayers: int = 2,
-                                 dropout: float = 0.1,
-                                 batch_size: int = 64,
-                                 epochs: int = 5,
-                                 lr: float = 1e-3,
-                                 seed: int = 137) -> Tuple[TrialTransformer, nn.Module]:
-    """
-    Trains the encoder using supervised regression: Trials -> Embedding -> Predicted Omega.
-    """
+def train_encoder_on_simulations(X_list, omega_list, in_dim, omega_dim, 
+                                 epochs=5, batch_size=64, lr=1e-3, seed=137):
+    """Supervised regression: Trials -> Embedding -> Predicted Omega."""
     torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    encoder = TrialTransformer(in_dim, model_dim=model_dim, nhead=nhead,
-                               nlayers=nlayers, dropout=dropout, out_dim=out_dim,
-                               use_pos_enc=True)
     
-    # Auxiliary regression head for training
-    reg_head = nn.Sequential(
-        nn.Linear(out_dim, out_dim),
-        nn.ReLU(),
-        nn.Linear(out_dim, omega_dim)
-    )
+    encoder = TrialTransformer(in_dim, out_dim=64, use_pos_enc=True)
+    reg_head = nn.Sequential(nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, omega_dim))
 
     params = list(encoder.parameters()) + list(reg_head.parameters())
     opt = torch.optim.AdamW(params, lr=lr, weight_decay=1e-4)
     loss_fn = nn.MSELoss()
 
-    # Normalize targets for stable MSE training
+    # Normalize targets
     Y = np.stack(omega_list, axis=0).astype(np.float32)
     y_mean = Y.mean(axis=0, keepdims=True)
     y_std = Y.std(axis=0, keepdims=True)
     y_std[y_std == 0.0] = 1.0
-    Y_scaled = (Y - y_mean) / y_std
-    omega_list_scaled = [Y_scaled[i] for i in range(Y_scaled.shape[0])]
+    omega_scaled = [(Y[i] - y_mean[0]) / y_std[0] for i in range(len(Y))]
 
-    ds = OmegaDataset(X_list, omega_list_scaled)
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=True, drop_last=False)
+    ds = OmegaDataset(X_list, omega_scaled)
+    dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
-    encoder.train()
-    reg_head.train()
-    
+    encoder.train(); reg_head.train()
     print(f"[Encoder] Starting pretraining for {epochs} epochs...")
+    
     for ep in range(epochs):
         total_loss = 0.0
         for Xb, Yb in dl:
-            Zb = encoder(Xb)
-            pred = reg_head(Zb)
+            pred = reg_head(encoder(Xb))
             loss = loss_fn(pred, Yb)
-            
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            total_loss += float(loss.item()) * Xb.size(0)
-        
-        avg_loss = total_loss / len(ds)
-        print(f"[Encoder] Epoch {ep+1}/{epochs} MSE={avg_loss:.4f}")
+            opt.zero_grad(); loss.backward(); opt.step()
+            total_loss += loss.item() * Xb.size(0)
+        print(f"[Encoder] Epoch {ep+1}/{epochs} MSE={total_loss/len(ds):.4f}")
 
-    # Freeze encoder after training
-    for p in encoder.parameters():
-        p.requires_grad = False
+    # Freeze encoder
+    for p in encoder.parameters(): p.requires_grad = False
     encoder.eval()
-    
     return encoder, reg_head
 
 
-# -----------------------------
-# 6) Summary Standardizer
-# -----------------------------
-
 class SummaryStandardizer:
-    def __init__(self):
-        self.mean_ = None
-        self.std_ = None
-
-    def fit(self, X: np.ndarray):
+    def fit(self, X):
         self.mean_ = X.mean(axis=0)
         self.std_ = X.std(axis=0)
         self.std_[self.std_ == 0] = 1.0
         return self
-
-    def transform(self, X: np.ndarray) -> np.ndarray:
-        return (X - self.mean_) / self.std_
-
-    def fit_transform(self, X: np.ndarray) -> np.ndarray:
-        self.fit(X)
-        return self.transform(X)
+    def transform(self, X): return (X - self.mean_) / self.std_
+    def fit_transform(self, X): return self.fit(X).transform(X)
 
 
-# -----------------------------
-# 7) Simulation Blocks
-# -----------------------------
+# --- 6. Pipeline Stages ---
 
 @dataclass
 class SimBlock:
-    omegas: torch.Tensor      # (N, D) in transformed space
-    embeds: np.ndarray        # (N, E) raw embeddings (before z-score)
+    omegas: torch.Tensor
+    embeds: np.ndarray
 
-
-def simulate_round(prior_sampler: Callable[[Tuple[int]], torch.Tensor],
-                   N: int,
-                   encoder: TrialTransformer,
-                   seed_offset: int = 0) -> SimBlock:
-    """
-    Samples parameters (omegas), runs the simulator, and computes embeddings.
-    """
+def simulate_round(prior_sampler, N, encoder, seed_offset=0):
     omegas = prior_sampler((N,))
     embeds = []
-    
     for i in range(N):
         params = untransform(omegas[i])
         df = simulate_data(params, seed=seed_offset + i)
         X = build_per_trial_features(df)
-        X_t = torch.tensor(X[None, ...], dtype=torch.float32)
-        
         with torch.no_grad():
-            z = encoder(X_t).squeeze(0).cpu().numpy().astype(np.float32)
-        embeds.append(z)
-        
+            z = encoder(torch.tensor(X[None, ...], dtype=torch.float32))
+        embeds.append(z.squeeze(0).numpy())
     return SimBlock(omegas=omegas, embeds=np.vstack(embeds))
 
 
-# -----------------------------
-# 8) SNPE Training
-# -----------------------------
-
-def train_snpe_from_arrays(omegas: torch.Tensor,
-                           embeds_z: torch.Tensor,
-                           prior: BoxUniform,
-                           density_estimator: str = "nsf"):
-    """
-    Trains the SNPE posterior density estimator.
-    """
-    inference = SNPE(prior=prior, density_estimator=density_estimator)
-    inference = inference.append_simulations(omegas, embeds_z)
-    density = inference.train()
-    posterior = inference.build_posterior(density)
-    return posterior
-
-
-# -----------------------------
-# 9) Inference & Sampling
-# -----------------------------
-
-def condition_and_sample(posterior, df_obs: pd.DataFrame,
-                         encoder: TrialTransformer,
-                         standardizer: SummaryStandardizer,
-                         num_samples: int = 20000) -> torch.Tensor:
-    """
-    Given observed data (df_obs), encode it, standardize it, and sample from the posterior.
-    """
-    X = build_per_trial_features(df_obs)
-    X_t = torch.tensor(X[None, ...], dtype=torch.float32)
+def run_pretrain(args, prior, D):
+    print(f"[Pretrain] Simulating {args.n1_pre} pairs...")
+    omegas = prior.sample((args.n1_pre,))
+    X_list, Omega_list = [], []
     
-    with torch.no_grad():
-        z = encoder(X_t).squeeze(0).cpu().numpy().astype(np.float32)[None, :]
+    for i in range(args.n1_pre):
+        params = untransform(omegas[i])
+        df = simulate_data(params, seed=i)
+        X_list.append(build_per_trial_features(df))
+        Omega_list.append(omegas[i].numpy())
     
-    z_z = standardizer.transform(z)[0]
-    z_t = torch.tensor(z_z, dtype=torch.float32)
+    encoder, _ = train_encoder_on_simulations(
+        X_list, Omega_list, in_dim=X_list[0].shape[1], omega_dim=D,
+        epochs=args.epochs
+    )
+    torch.save(encoder.state_dict(), ENC_PATH)
+    print(f"[Pretrain] Encoder saved to {ENC_PATH}")
+
+
+def run_snpe(args, prior, encoder):
+    # Round 1
+    print(f"[Round1] Simulating {args.n1_pre} pairs...")
+    block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0)
     
-    samples = posterior.sample((num_samples,), x=z_t)
-    return samples
-
-
-# -----------------------------
-# 10) Utilities (IO, Recovery)
-# -----------------------------
-
-def save_object(obj, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
-        pickle.dump(obj, f)
-
-def load_object(path):
-    with open(path, "rb") as f:
-        return pickle.load(f)
-
-def load_encoder(in_dim, model_dim=64, out_dim=64, nhead=4, nlayers=2, dropout=0.1):
-    enc = TrialTransformer(in_dim, model_dim=model_dim, nhead=nhead,
-                           nlayers=nlayers, dropout=dropout, out_dim=out_dim, use_pos_enc=True)
-    enc.load_state_dict(torch.load(ENC_PATH, map_location="cpu"))
-    enc.eval()
-    for p in enc.parameters():
-        p.requires_grad = False
-    return enc
-
-def save_standardizer(stdzr: SummaryStandardizer):
-    os.makedirs(ART_DIR, exist_ok=True)
-    np.save(STD_MEAN_PATH, stdzr.mean_)
-    np.save(STD_STD_PATH,  stdzr.std_)
-
-def load_standardizer():
     stdzr = SummaryStandardizer()
-    stdzr.mean_ = np.load(STD_MEAN_PATH)
-    stdzr.std_ = np.load(STD_STD_PATH)
-    return stdzr
-
-def posterior_stats_original(samples_t: torch.Tensor):
-    """
-    Computes statistics (mean, median, 90% CI) in the original parameter space.
-    """
-    samples_np = samples_t.detach().cpu().numpy()
-    rows = [untransform(torch.tensor(s)) for s in samples_np]
-    M = pd.DataFrame(rows)
-    M = M[PARAM_ORDER + list(FIXED_PARAMS.keys())]
+    embeds_1_z = stdzr.fit_transform(block1.embeds)
     
-    stats = {}
-    for k in PARAM_ORDER:
-        stats[k] = {
-            "mean":   M[k].mean(),
-            "median": M[k].median(),
-            "p05":    M[k].quantile(0.05),
-            "p95":    M[k].quantile(0.95),
-        }
-    return stats, M
+    # Save standardizer using numpy
+    np.save(STD_MEAN_PATH, stdzr.mean_)
+    np.save(STD_STD_PATH, stdzr.std_)
 
-def recovery_sweep(prior: BoxUniform,
-                   posterior,
-                   encoder: nn.Module,
-                   standardizer,
-                   K: int = 100,
-                   num_post: int = 4000,
-                   seed: int = 2024):
-    """
-    Performs a recovery test:
-    1. Sample K ground-truth omegas.
-    2. Simulate data for each.
-    3. Infer posterior and check if ground truth is within the 90% CI.
-    """
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    print(f"[Round1] Training SNPE ({args.density})...")
+    inference = SNPE(prior=prior, density_estimator=args.density)
+    inference.append_simulations(block1.omegas, torch.tensor(embeds_1_z, dtype=torch.float32))
+    density = inference.train()
+    posterior_1 = inference.build_posterior(density)
     
-    abs_err = {k: [] for k in PARAM_ORDER}
-    sq_err = {k: [] for k in PARAM_ORDER}
-    hit90 = {k: [] for k in PARAM_ORDER}
+    with open(POST1_PATH, "wb") as f: pickle.dump(posterior_1, f)
+
+    # Round 2 (Optional)
+    if args.n2 > 0:
+        print(f"[Round2] Active Learning with {args.n2} simulations...")
+        # Mixture Proposal
+        def proposal_sampler(shape):
+            n = shape[0]; n_prior = int(args.mix_prior_frac * n); n_post = n - n_prior
+            return torch.cat([prior.sample((n_prior,)), posterior_1.sample((n_post,))], dim=0)
+
+        block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000)
+        embeds_2_z = stdzr.transform(block2.embeds)
+
+        omegas_all = torch.cat([block1.omegas, block2.omegas], 0)
+        embeds_all = torch.cat([torch.tensor(embeds_1_z), torch.tensor(embeds_2_z)], 0)
+
+        print("[Merged] Training Final Posterior...")
+        inference = SNPE(prior=prior, density_estimator=args.density)
+        inference.append_simulations(omegas_all, embeds_all.float())
+        density = inference.train()
+        posterior_final = inference.build_posterior(density)
+    else:
+        posterior_final = posterior_1
+
+    with open(POSTF_PATH, "wb") as f: pickle.dump(posterior_final, f)
+
+
+def run_recovery(args, prior, posterior, encoder, standardizer):
+    print(f"[Recovery] Checking {args.K} ground-truth cases...")
+    omegas_true = prior.sample((args.K,))
     details = []
+    
+    for i in range(args.K):
+        gt_params = untransform(omegas_true[i])
+        df_obs = simulate_data(gt_params, seed=4242 + i)
+        
+        # Inference
+        X = build_per_trial_features(df_obs)
+        with torch.no_grad():
+            z = encoder(torch.tensor(X[None, ...], dtype=torch.float32)).numpy()
+        z_z = standardizer.transform(z)
+        samples = posterior.sample((args.num_post,), x=torch.tensor(z_z, dtype=torch.float32))
+        
+        # Stats
+        row = {"case": i}
+        samples_np = samples.numpy()
+        for k_idx, k in enumerate(PARAM_ORDER):
+            # Transform back to original space for stats
+            vals = [untransform(torch.tensor(s))[k] for s in samples_np]
+            mu, lo, hi = np.mean(vals), np.percentile(vals, 5), np.percentile(vals, 95)
+            gt_val = gt_params[k]
+            row[f"gt_{k}"] = gt_val
+            row[f"mu_{k}"] = mu
+            row[f"hit90_{k}"] = 1.0 if lo <= gt_val <= hi else 0.0
+        details.append(row)
 
-    omegas_true = prior.sample((K,))
-
-    for i in range(K):
-        omega_star = omegas_true[i]
-        omega_true_orig = untransform(omega_star)
-
-        # Simulate observed dataset
-        df_obs = simulate_data(omega_true_orig, seed=seed + i)
-
-        # Infer
-        samples_t = condition_and_sample(
-            posterior, df_obs, encoder, standardizer, num_samples=num_post)
-        stats, _ = posterior_stats_original(samples_t)
-
-        rec = {"case": i}
-        for k in PARAM_ORDER:
-            mu = stats[k]["mean"]
-            lo = stats[k]["p05"]
-            hi = stats[k]["p95"]
-            gt = omega_true_orig[k]
-
-            abs_err[k].append(abs(mu - gt))
-            sq_err[k].append((mu - gt) ** 2)
-            hit90[k].append(1.0 if lo <= gt <= hi else 0.0)
-
-            rec[f"gt_{k}"] = gt
-            rec[f"mu_{k}"] = mu
-            rec[f"lo90_{k}"] = lo
-            rec[f"hi90_{k}"] = hi
-            rec[f"hit90_{k}"] = hit90[k][-1]
-        details.append(rec)
-
-    rows = []
-    for k in PARAM_ORDER:
-        mae = float(np.mean(abs_err[k]))
-        rmse = float(np.sqrt(np.mean(sq_err[k])))
-        cov = float(np.mean(hit90[k]))
-        rows.append({"param": k, "MAE": mae, "RMSE": rmse, "coverage90": cov})
-    metrics = pd.DataFrame(rows).set_index("param")
-
-    return metrics, pd.DataFrame(details)
+    pd.DataFrame(details).to_csv(RECOVERY_CSV, index=False)
+    print(f"[Recovery] Saved to {RECOVERY_CSV}")
 
 
-def parse_id_year_from_filename(filename: str):
-    """
-    Example filename: NDAR_INV0A4P0LWM_baseline_year_1_arm_1_sst.csv.zip
-    Returns: ("INV0A4P0LWM", "baseline")
-    """
-    base = os.path.basename(filename)
-    parts = base.split("_")
-    sid = parts[1] if len(parts) > 1 else base
-    year = parts[2] if len(parts) > 2 else "unknown"
-    return sid, year
+def run_inference(args, posterior, encoder, standardizer):
+    out_root = ART_DIR / "subjects"
+    out_root.mkdir(parents=True, exist_ok=True)
+    
+    files = []
+    if args.real_csv: files.append(Path(args.real_csv))
+    if args.sst_folder: files.extend(Path(args.sst_folder).glob(args.glob_pat))
+    files = sorted(files)
+    
+    print(f"[Inference] Processing {len(files)} files...")
+    summaries = []
+
+    for fp in files:
+        try:
+            # Parse filename (Assumes NDAR_ID_YEAR_...)
+            parts = fp.name.split('_')
+            sid = parts[1] if len(parts) > 1 else fp.stem
+            year = parts[2] if len(parts) > 2 else "unknown"
+
+            df_obs = preprocessing(str(fp))
+            X = build_per_trial_features(df_obs)
+            with torch.no_grad():
+                z = encoder(torch.tensor(X[None, ...], dtype=torch.float32)).numpy()
+            z_z = standardizer.transform(z)
+            
+            samples = posterior.sample((args.num_samples,), x=torch.tensor(z_z, dtype=torch.float32))
+            
+            # Save Results
+            rows = [untransform(s) for s in samples]
+            post_df = pd.DataFrame(rows)
+            summ = post_df.describe(percentiles=[0.05, 0.5, 0.95]).T[["mean", "std", "5%", "50%", "95%"]]
+            
+            subj_dir = out_root / f"{sid}_{year}"
+            subj_dir.mkdir(exist_ok=True)
+            post_df.to_csv(subj_dir / "posterior_samples.csv", index=False)
+            summ.to_csv(subj_dir / "posterior_summary.csv")
+            
+            s_row = summ.copy(); s_row["subject_id"] = sid; s_row["subject_year"] = year
+            summaries.append(s_row.reset_index())
+
+        except Exception as e:
+            print(f"[Error] {fp.name}: {e}")
+
+    if summaries:
+        pd.concat(summaries).to_csv(POST_SUMMARY_CSV, index=False)
+        print(f"[Inference] All summaries saved to {POST_SUMMARY_CSV}")
 
 
-# -----------------------------
-# 11) Main Execution
-# -----------------------------
+# --- 7. Main ---
 
 def main():
     warnings.filterwarnings("ignore")
@@ -566,301 +485,64 @@ def main():
     
     # Global Seed
     SEED = 137
-    np.random.seed(SEED)
-    random.seed(SEED)
-    torch.manual_seed(SEED)
+    np.random.seed(SEED); random.seed(SEED); torch.manual_seed(SEED)
 
-    parser = argparse.ArgumentParser(description="Transformer-based SNPE Pipeline for POMDP-SST")
+    parser = argparse.ArgumentParser(description="Transformer-based SNPE Pipeline")
     parser.add_argument("--stage", choices=["all", "pretrain", "snpe", "recover", "posterior"], default="all")
     parser.add_argument("--n1_pre", type=int, default=20000, help="Simulations for pretraining/Round 1")
     parser.add_argument("--epochs", type=int, default=5, help="Pretraining epochs")
     parser.add_argument("--n2", type=int, default=15000, help="Round 2 simulations")
-    parser.add_argument("--mix_prior_frac", type=float, default=0.2, help="Fraction of prior samples in proposal")
-    parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="SBI density estimator")
+    parser.add_argument("--mix_prior_frac", type=float, default=0.2, help="Prior fraction in proposal")
+    parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="Density estimator")
     
-    # Recovery arguments
-    parser.add_argument("--K", type=int, default=20, help="Number of recovery test cases")
-    parser.add_argument("--num_post", type=int, default=1000, help="Samples per posterior in recovery")
-    
-    # Real data arguments
-    parser.add_argument("--real_csv", type=str, default=None, help="Path to single real data CSV")
-    parser.add_argument("--sst_folder", type=str, default=None, help="Folder containing real data CSVs")
-    parser.add_argument("--glob_pat", type=str, default="NDAR_*.csv*", help="File pattern for sst_folder")
+    # Recovery/Inference args
+    parser.add_argument("--K", type=int, default=20, help="Recovery test cases")
+    parser.add_argument("--num_post", type=int, default=1000, help="Samples per recovery posterior")
+    parser.add_argument("--real_csv", type=str, default=None, help="Single real CSV")
+    parser.add_argument("--sst_folder", type=str, default=None, help="Folder of real CSVs")
+    parser.add_argument("--glob_pat", type=str, default="NDAR_*.csv*", help="File pattern")
     parser.add_argument("--num_samples", type=int, default=20000, help="Posterior samples per subject")
 
     args = parser.parse_args()
+    ART_DIR.mkdir(exist_ok=True)
 
     prior, _, _ = make_box_prior()
     D = len(PARAM_ORDER)
 
-    os.makedirs(ART_DIR, exist_ok=True)
-
-    # ========================
-    # Stage: Pretrain Encoder
-    # ========================
+    # 1. Pretrain
     if args.stage in ["all", "pretrain"]:
-        N1_pre = args.n1_pre
-        print(f"[Pretrain] Simulating {N1_pre} pairs for encoder training...")
-        
-        omegas_1 = prior.sample((N1_pre,))
-        X_list, Omega_list = [], []
-        
-        for i in range(N1_pre):
-            params = untransform(omegas_1[i])
-            df = simulate_data(params, seed=i)
-            X = build_per_trial_features(df)
-            X_list.append(X)
-            Omega_list.append(omegas_1[i].numpy())
-        
-        in_dim = X_list[0].shape[1]
+        run_pretrain(args, prior, D)
+        if args.stage == "pretrain": return
 
-        encoder, _ = train_encoder_on_simulations(
-            X_list, Omega_list, in_dim=in_dim, omega_dim=D,
-            epochs=args.epochs, batch_size=64
-        )
-        torch.save(encoder.state_dict(), ENC_PATH)
-        print(f"[Pretrain] Encoder saved to {ENC_PATH}")
-        
-        if args.stage == "pretrain":
-            print("[Pretrain] Done.")
-            return
+    # Load Encoder
+    # Note: Logic to determine input dim for loading is simplified here for brevity
+    # In production, we'd save/load config args.
+    dummy_df = simulate_data(untransform(prior.sample((1,))[0]), seed=0)
+    in_dim = build_per_trial_features(dummy_df).shape[1]
+    
+    encoder = TrialTransformer(in_dim, out_dim=64, use_pos_enc=True)
+    encoder.load_state_dict(torch.load(ENC_PATH))
+    encoder.eval()
+    for p in encoder.parameters(): p.requires_grad = False
 
-    else:
-        # Load existing encoder; determine input dimension from a dummy simulation
-        dummy_df = simulate_data(untransform(prior.sample((1,))[0]), seed=0)
-        in_dim = build_per_trial_features(dummy_df).shape[1]
-        encoder = load_encoder(in_dim)
-
-    # ========================
-    # Stage: SNPE Training
-    # ========================
+    # 2. SNPE
     if args.stage in ["all", "snpe"]:
-        # If running only SNPE stage, regenerate Round 1 data
-        if args.stage == "snpe":
-            N1_pre = args.n1_pre
-            print(f"[Round1] Regenerating {N1_pre} simulations for embeddings...")
-            omegas_1 = prior.sample((N1_pre,))
-            X_list = []
-            for i in range(N1_pre):
-                params = untransform(omegas_1[i])
-                df = simulate_data(params, seed=i)
-                X_list.append(build_per_trial_features(df))
-
-        print(f"[Round1] generating embeddings for {len(X_list)} simulations...")
-        embeds_1 = []
-        for X in X_list:
-            X_t = torch.tensor(X[None, ...], dtype=torch.float32)
-            with torch.no_grad():
-                z = encoder(X_t).squeeze(0).cpu().numpy().astype(np.float32)
-            embeds_1.append(z)
-        embeds_1 = np.vstack(embeds_1)
-
+        run_snpe(args, prior, encoder)
+    
+    # Load Posterior & Standardizer for next steps
+    if args.stage in ["recover", "posterior"] or args.stage == "all":
+        with open(POSTF_PATH, "rb") as f: posterior = pickle.load(f)
         stdzr = SummaryStandardizer()
-        embeds_1_z = stdzr.fit_transform(embeds_1)
-        save_standardizer(stdzr)
+        stdzr.mean_ = np.load(STD_MEAN_PATH)
+        stdzr.std_ = np.load(STD_STD_PATH)
 
-        print(f"[Round1] Training SNPE ({args.density}) posterior...")
-        posterior_1 = train_snpe_from_arrays(
-            omegas_1, torch.tensor(embeds_1_z, dtype=torch.float32), prior, density_estimator=args.density
-        )
-        save_object(posterior_1, POST1_PATH)
-
-        # --- Round 2: Active Learning ---
-        N2 = args.n2
-        if N2 > 0:
-            print(f"[Round2] Simulating {N2} using proposal distribution...")
-            
-            # Select anchor points for mixture proposal
-            M_anchors = min(8, embeds_1_z.shape[0])
-            anchor_idx = np.random.choice(embeds_1_z.shape[0], size=M_anchors, replace=False)
-            pilot_x_list = [torch.tensor(embeds_1_z[j], dtype=torch.float32) for j in anchor_idx]
-
-            def proposal_sampler(shape):
-                n = shape[0]
-                n_prior = int(args.mix_prior_frac * n)
-                n_post = n - n_prior
-                
-                # Sample from Prior
-                th_prior = prior.sample((n_prior,))
-                
-                # Sample from Round-1 Posterior (mixture of anchors)
-                per_anchor = max(1, n_post // M_anchors)
-                th_posts = []
-                for px in pilot_x_list:
-                    th_posts.append(posterior_1.sample((per_anchor,), x=px))
-                th_post = torch.cat(th_posts, dim=0)
-                
-                # Padding if needed
-                if th_post.shape[0] < n_post:
-                    extra = prior.sample((n_post - th_post.shape[0],))
-                    th_post = torch.cat([th_post, extra], dim=0)
-                    
-                return torch.cat([th_prior, th_post[:n_post]], dim=0)
-
-            block2 = simulate_round(proposal_sampler, N2, encoder, seed_offset=1_000_000)
-            embeds_2_z = stdzr.transform(block2.embeds)
-            
-            # Merge Datasets
-            omegas_all = torch.cat([omegas_1, block2.omegas], dim=0)
-            embeds_all = torch.cat([
-                torch.tensor(embeds_1_z, dtype=torch.float32),
-                torch.tensor(embeds_2_z, dtype=torch.float32)
-            ], dim=0)
-
-            print("[Merged] Training final SNPE posterior...")
-            posterior_final = train_snpe_from_arrays(
-                omegas_all, embeds_all, prior, density_estimator=args.density
-            )
-        else:
-            posterior_final = posterior_1
-
-        save_object(posterior_final, POSTF_PATH)
-
-    elif args.stage in ["recover", "posterior"]:
-        stdzr = load_standardizer()
-        posterior_final = load_object(POSTF_PATH)
-
-    # ========================
-    # Stage: Recovery Check
-    # ========================
+    # 3. Recovery
     if args.stage in ["all", "recover"]:
-        print(f"[Recovery] Running recovery sweep (K={args.K})...")
-        metrics, details = recovery_sweep(
-            prior=prior,
-            posterior=posterior_final,
-            encoder=encoder,
-            standardizer=stdzr,
-            K=args.K,
-            num_post=args.num_post,
-            seed=4242
-        )
-        print(metrics)
-        details.to_csv(os.path.join(ART_DIR, "recovery_details.csv"), index=False)
+        run_recovery(args, prior, posterior, encoder, stdzr)
 
-    # ========================
-    # Stage: Inference on Data
-    # ========================
+    # 4. Inference
     if args.stage in ["all", "posterior"]:
-        out_root = ART_DIR
-        
-        # 1. Folder Mode
-        if args.sst_folder is not None:
-            files = sorted(glob.glob(os.path.join(args.sst_folder, args.glob_pat)))
-            print(f"[Posterior] Processing {len(files)} files in {args.sst_folder}...")
-
-            os.makedirs(os.path.join(out_root, "subjects"), exist_ok=True)
-            summaries = []
-            n_ok, n_err = 0, 0
-
-            for fp in files:
-                sid, year = parse_id_year_from_filename(fp)
-                try:
-                    df_obs = preprocessing(fp)
-                    samples = condition_and_sample(
-                        posterior_final, df_obs, encoder, stdzr, num_samples=args.num_samples
-                    )
-
-                    # Stats
-                    samples_np = samples.detach().cpu().numpy()
-                    rows = [untransform(torch.tensor(s)) for s in samples_np]
-                    post_df = pd.DataFrame(rows)
-                    summary = post_df.describe(percentiles=[0.05, 0.5, 0.95]).T[[
-                        "mean", "std", "5%", "50%", "95%"]]
-                    summary.index.name = "param"
-
-                    # Save per subject
-                    subj_dir = os.path.join(out_root, "subjects", f"{sid}_{year}")
-                    os.makedirs(subj_dir, exist_ok=True)
-                    post_df.to_csv(os.path.join(subj_dir, "posterior_samples.csv"), index=False)
-                    summary.to_csv(os.path.join(subj_dir, "posterior_summary.csv"))
-
-                    # Aggregate
-                    s_sum = summary.copy()
-                    s_sum.insert(0, "subject_year", year)
-                    s_sum.insert(0, "subject_id", sid)
-                    summaries.append(s_sum.reset_index())
-                    n_ok += 1
-                except Exception as e:
-                    print(f"[ERROR] {os.path.basename(fp)}: {e}")
-                    n_err += 1
-
-            if summaries:
-                big = pd.concat(summaries, axis=0, ignore_index=True)
-                big.to_csv(os.path.join(out_root, "posterior_summary_all.csv"), index=False)
-            print(f"[Posterior] Finished. OK={n_ok}, Errors={n_err}")
-
-        # 2. Single File Mode
-        elif args.real_csv is not None:
-            sid, year = parse_id_year_from_filename(args.real_csv)
-            print(f"[Posterior] Single file: {args.real_csv} (ID={sid})")
-
-            df_obs = preprocessing(args.real_csv)
-            samples = condition_and_sample(
-                posterior_final, df_obs, encoder, stdzr, num_samples=args.num_samples
-            )
-            
-            samples_np = samples.detach().cpu().numpy()
-            rows = [untransform(torch.tensor(s)) for s in samples_np]
-            post_df = pd.DataFrame(rows)
-            summary = post_df.describe(percentiles=[0.05, 0.5, 0.95]).T[[
-                "mean", "std", "5%", "50%", "95%"]]
-            
-            # Output
-            single_dir = os.path.join(out_root, "subjects", f"{sid}_{year}")
-            os.makedirs(single_dir, exist_ok=True)
-            post_df.to_csv(os.path.join(single_dir, "posterior_samples.csv"), index=False)
-            summary.to_csv(os.path.join(single_dir, "posterior_summary.csv"))
-            print(summary)
+        run_inference(args, posterior, encoder, stdzr)
 
 if __name__ == "__main__":
     main()
-
-# -----------------------------
-# Example Usage:
-# -----------------------------
-# A. Smoke Test (Fast Debugging)
-# 1. Pretrain Encoder (very quick)
-# python pipeline_transformer_snpe.py \
-#   --stage pretrain \
-#   --n1_pre 500 \
-#   --epochs 2
-
-# # 2. Train SNPE (Round 1 & 2)
-# python pipeline_transformer_snpe.py \
-#   --stage snpe \
-#   --n1_pre 500 \
-#   --n2 200 \
-#   --density maf
-
-# # 3. Quick Recovery Check (5 test cases)
-# python pipeline_transformer_snpe.py \
-#   --stage recover \
-#   --K 5 \
-#   --num_post 500
-# -----------------------------
-# B. Real Run (Production / High Fidelity)
-# 1. Pretrain Encoder (longer training for better embeddings)
-# python pipeline_transformer_snpe.py \
-#   --stage pretrain \
-#   --n1_pre 30000 \
-#   --epochs 8
-
-# # 2. Train SNPE (Heavy computation)
-# python pipeline_transformer_snpe.py \
-#   --stage snpe \
-#   --n1_pre 30000 \
-#   --n2 20000 \
-#   --density nsf
-
-# # 3. Full Recovery Sweep (200 test cases)
-# python pipeline_transformer_snpe.py \
-#   --stage recover \
-#   --K 200 \
-#   --num_post 4000
-
-# # 4. Inference on Real Data Folder
-# python pipeline_transformer_snpe.py \
-#   --stage posterior \
-#   --sst_folder "/home/wwang/data/all_valid" \
-#   --glob_pat "NDAR_*.csv.zip" \
-#   --num_samples 14988

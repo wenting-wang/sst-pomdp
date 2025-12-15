@@ -12,11 +12,13 @@ set -eo pipefail
 # ==========================================
 # CONFIGURATION
 # ==========================================
-SST_FOLDER="/home/wwang/data/all_valid"      # Data source
-CSV_FILE="stats_all_cbcl_demo.csv"           # Subject list (in submit dir)
-OUTPUT_FILE="embeddings_mean_std.csv"        # Output filename
+SST_FOLDER="/home/wwang/data/sst_valid_raw"        # Data source (Needs to match CLEAN_DATA_DIR in filter.py)
+CSV_FILE="stats_beh_full.csv"                # Subject list (In submit dir)
+OUTPUT_FILE="subject_embeddings.csv"             # Output filename
+OUTPUT_DIR="${SLURM_SUBMIT_DIR}"                  # Final destination for results
 
-# Absolute path to your existing trained model
+# Absolute path to your existing trained model (encoder.pt)
+# NOTE: This path must exist before the job starts.
 SOURCE_MODEL_PATH="/home/wwang/ptmp/823879/artifacts_sbi_txf/encoder.pt"
 
 CONDA_ENV="pymc_env"
@@ -29,6 +31,7 @@ CONDA_ENV="pymc_env"
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 export SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
 # 2. Scratch Directory Setup
@@ -39,13 +42,12 @@ echo "Running in scratch: ${SCRATCH_DIRECTORY}"
 # 3. Copy files to scratch
 cd "${SCRATCH_DIRECTORY}"
 
-# A) Copy scripts and CSV from the directory where you submitted the job
+# A) Copy scripts and metadata CSV from the directory where you submitted the job
 cp "${SLURM_SUBMIT_DIR}/embedding.py"       .
 cp "${SLURM_SUBMIT_DIR}/preprocessing.py"   . || true
 cp "${SLURM_SUBMIT_DIR}/${CSV_FILE}"        .
 
-# B) Copy the trained model from your specific path to here
-#    (Using the filename 'encoder.pt' in scratch)
+# B) Copy the trained model artifact and rename it locally to 'encoder.pt'
 echo "Copying model from ${SOURCE_MODEL_PATH}..."
 cp "${SOURCE_MODEL_PATH}" ./encoder.pt
 
@@ -59,18 +61,30 @@ conda activate "${CONDA_ENV}"
 
 echo "Starting Embedding Generation..."
 
-# Note: We pass --model_path "encoder.pt" because we copied it to the current folder (.)
+# Run the python script
+# We pass the metadata CSV, the raw data folder, the encoder path (now local 'encoder.pt'), and the output filename.
 srun python embedding.py \
-    --csv "${CSV_FILE}" \
-    --folder "${SST_FOLDER}" \
-    --model_path "encoder.pt" \
+    --files_list "${CSV_FILE}" \
+    --data_dir "${SST_FOLDER}" \
+    --encoder_path "./encoder.pt" \
+    --meta_csv "${CSV_FILE}" \
     --out "${OUTPUT_FILE}"
 
 # ==========================================
-# SAVE RESULTS
+# SAVE RESULTS & NO CLEANUP
 # ==========================================
 
-echo "Copying result (${OUTPUT_FILE}) back to submit directory..."
-cp "${OUTPUT_FILE}" "${SLURM_SUBMIT_DIR}/"
+echo "Saving results to ${OUTPUT_DIR}..."
 
-echo "Job Complete."
+# Copy the output CSV back to the submit directory
+if [ -f "${OUTPUT_FILE}" ]; then
+    cp "${OUTPUT_FILE}" "${OUTPUT_DIR}/"
+    echo "Results copied successfully."
+else
+    echo "ERROR: Output file ${OUTPUT_FILE} not found in scratch."
+fi
+
+# Cleanup is skipped as requested, but we print the location
+echo "Scratch directory preserved at: ${SCRATCH_DIRECTORY}"
+
+exit 0

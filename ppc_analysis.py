@@ -13,12 +13,13 @@ from preprocessing import preprocessing
 
 BASE_DIR = Path("/Users/w/Desktop/data")
 WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
+ARTIFACTS_DIR = Path("/Users/w/Desktop/artifacts_sbi_txf_823879")
 
 # Inputs
 RAW_DATA_DIR = BASE_DIR / "sst_valid_raw"
 FILTER_CSV = WORK_DIR / "stats_beh_full.csv"
 PPC_METRICS_CSV = WORK_DIR / "ppc_metrics.csv"  # Output from ppc.py
-PARAMS_CSV = WORK_DIR / "posterior_summary_all.csv"
+PARAMS_CSV = ARTIFACTS_DIR / "posterior_summary_all.csv"
 
 # Output
 OUTPUT_IMAGE = WORK_DIR / "ppc.png" # representative subjects
