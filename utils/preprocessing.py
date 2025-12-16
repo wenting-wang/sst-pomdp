@@ -56,7 +56,7 @@ def preprocessing(file_path: Union[str, Path]) -> pd.DataFrame:
     # Priority is implicitly handled by the mutually exclusive nature of masks above.
     conditions = [is_gs, is_ge, is_gm, is_ss, is_se]
     choices = ['GS', 'GE', 'GM', 'SS', 'SE']
-    df['result'] = np.select(conditions, choices, default=np.nan)
+    df['result'] = np.select(conditions, choices, default='nan')
 
     # --- 2. Process Time Variables (RT & SSD) ---
     

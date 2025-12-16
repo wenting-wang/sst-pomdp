@@ -1,14 +1,20 @@
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 import pandas as pd
 import re
 from pathlib import Path
-from preprocessing import preprocessing
-from metrics import get_stats_mean
+from utils.preprocessing import preprocessing
+from utils.metrics import get_stats_mean
 
 # --- Configuration & Constants ---
 
 # Paths
-BASE_DIR = Path('/Users/w/Desktop/data')
-WORK_DIR = Path('/Users/w/sst-abcd-adhd-mac/clean_version_within')
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 FILE_LIST_PATH = BASE_DIR / 'sst_valid_filenames.txt'
 DATA_DIR = BASE_DIR / 'sst_valid_raw'
 
@@ -19,8 +25,7 @@ MEDS_FILE = BASE_DIR / 'ph_p_meds.csv'
 IQ_FILE = BASE_DIR / 'nc_y_wisc.csv'
 
 # Output Files
-OUT_STATS_CSV = WORK_DIR / 'stats_beh.csv'          # Behavioral stats
-OUT_FINAL_CSV = WORK_DIR / 'stats_beh_full.csv'     # Stats + Demographics + Clinical
+OUT_FINAL_CSV = OUT_DIR /  'stats_beh_full.csv'     # Behavioral stats + Demographics + Clinical
 
 # Constants
 YEAR_MAP = {
@@ -163,15 +168,8 @@ def get_iq_data(path):
 
 def main():
     # 1. Compute Behavioral Stats (Time Consuming)
-    if OUT_STATS_CSV.exists():
-        print(f"Loading existing stats from {OUT_STATS_CSV}...")
-        df_stats = pd.read_csv(OUT_STATS_CSV)
-    else:
-        print("Computing behavioral stats from raw files...")
-        df_stats = get_behavioral_stats(FILE_LIST_PATH, DATA_DIR)
-        OUT_STATS_CSV.parent.mkdir(parents=True, exist_ok=True)
-        df_stats.to_csv(OUT_STATS_CSV, index=False)
-        print(f"Saved intermediate stats to {OUT_STATS_CSV}")
+    print("Computing behavioral stats from raw files...")
+    df_stats = get_behavioral_stats(FILE_LIST_PATH, DATA_DIR)
 
     # 2. Load Metadata
     print("Loading Demographics, CBCL, Meds, and IQ...")
@@ -183,7 +181,7 @@ def main():
     # 3. Merge DataFrames
     # Start with stats, join everything on subject_id and year
     print("Merging datasets...")
-    
+
     # Inner join for critical demographics
     df_merged = pd.merge(df_stats, df_cbcl, on=['subject_id', 'year'], how='inner')
     df_merged = pd.merge(df_merged, df_demo, on=['subject_id', 'year'], how='inner')
@@ -200,7 +198,6 @@ def main():
     # 5. Save Final Output
     df_final.to_csv(OUT_FINAL_CSV, index=False)
     print(f"Done. Final dataset saved to: {OUT_FINAL_CSV}")
-    print(df_final.head())
 
 if __name__ == "__main__":
     main()

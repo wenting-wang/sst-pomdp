@@ -65,7 +65,7 @@ cp "${SLURM_SUBMIT_DIR}/preprocessing.py"               . || true
 cp "${SLURM_SUBMIT_DIR}/pipeline_transformer_snpe.py"   .
 
 # Create output directory
-mkdir -p artifacts_sbi_txf
+mkdir -p outputs
 
 # 4. Activate Environment
 source /home/${USER}/miniconda3/etc/profile.d/conda.sh
@@ -118,11 +118,11 @@ fi
 
 echo "Saving results to ${SLURM_SUBMIT_DIR}..."
 
-if [ -d "artifacts_sbi_txf" ]; then
-    cp -r artifacts_sbi_txf "${SLURM_SUBMIT_DIR}/"
+if [ -d "outputs" ]; then
+    cp -r outputs "${SLURM_SUBMIT_DIR}/"
     echo "Results saved."
 else
-    echo "Warning: artifacts_sbi_txf directory not found!"
+    echo "Warning: outputs directory not found!"
 fi
 
 # ==========================================

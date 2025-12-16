@@ -5,15 +5,15 @@ from pathlib import Path
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
-PARAMS_CSV = WORK_DIR / "posterior_summary_all.csv"
-STATS_CSV = WORK_DIR / "stats_beh_full.csv"
+PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
+STATS_CSV = OUT_DIR / "stats_beh_full.csv"
 
 # Output
-OUTPUT_PLOT = WORK_DIR / "parameters.png"
+OUTPUT_PLOT = OUT_DIR / "parameters.png"
 
 # Analysis Config
 ALL_PARAMS = [

@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 
 # --- Configuration & Paths ---
-BASE_DIR = Path("/Users/w/Desktop/data")
+BASE_DIR = Path("/kyb/agpd/wwang/data")
 
 # Input
 INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"

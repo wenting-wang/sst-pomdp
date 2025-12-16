@@ -65,40 +65,51 @@ These scripts analyze the inferred parameters and generate final summary tables.
 For improved clarity, modularity, and long-term maintenance, it is highly recommended to arrange the files into a functional subfolder structure.
 
 ```
-sst-pomdp/
-├── data/                             # Raw and processed external data
-│   ├── raw_abcd_sst/                 # Original raw files (e.g., zips)
-│   └── sst_valid_raw/                # Cleaned, filtered raw files (used by the pipeline)
-|
-├── src/                              # All Python code for the pipeline
-│   ├── model_core/                   # Core math and model definition
-│   │   ├── pomdp.py                  # POMDP model definition
-│   │   └── metrics.py                # Behavioral and distance metrics
+.
+├── data/                                   # Raw data
+│   ├── abcd_sst_tlb01/                     # Original raw files
+│   ├── sst_valid_raw/                      # Cleaned, filtered raw files
+│   ├── abcd_p_demo.csv
+│   ├── mh_p_cbcl.csv
+│   ├── mri_y_tfmr_sst_beh.csv
+│   ├── nc_y_wisc.csv
+│   ├── ph_p_meds.csv
+│   └── sst_valid_filenames.txt
+│
+├── sst-pomdp/                              # Main source code and scripts
+│   ├── model/                              # Core math and model definition
+│   │   └── pomdp.py                        # POMDP model definition
 │   │
-│   ├── data_prep/                    # Data cleaning and feature extraction
-│   │   ├── filter.py                 # QC filtering
-│   │   ├── stats.py                  # Behavioral stats calculation
-│   │   └── preprocessing.py          # Trial-level cleaning/discretization
+│   ├── utils/                              # Data cleaning and feature extraction
+│   │   ├── filter.py                       # QC filtering
+│   │   ├── stats.py                        # Behavioral stats calculation
+│   │   ├── preprocessing.py                # Trial-level cleaning/discretization
+│   │   └── metrics.py                      # Behavioral and distance metrics
 │   │
-│   ├── sbi_inference/                # SBI (Transformer + SNPE) components
-│   │   ├── pipeline_transformer_snpe.py # End-to-end SBI logic
-│   │   └── embedding.py              # Subject embedding extraction
+│   ├── inference/                          # SBI (Transformer + SNPE) components
+│   │   ├── pipeline_transformer_snpe.py    # End-to-end SBI logic
+│   │   └── embedding.py                    # Subject embedding extraction
+│   │   ppc.py
+
+│   ├── analysis/                           # Parameter analysis, LMMs, and PPC plotting
+│   │   ├── param_analysis.py               # Parameter distribution plots
+│   │   ├── param_lmm.py                    # LMM for parameter-trait correlation
+│   │   ├── count_demo.py                   # Demographics table generation
+│   │   ├── ppc_analysis.py                 # Representative subject fit plots
+│   │   ├── ppc_popu_analysis.py            # Population PPC histograms
+│   │   └── recovery_analysis.py            # Parameter recovery analysis
 │   │
-│   └── analysis/                     # Parameter analysis, LMMs, and PPC plotting
-│       ├── param_analysis.py         # Parameter distribution plots
-│       ├── param_lmm.py              # LMM for parameter-trait correlation
-│       ├── count_demo.py             # Demographics table generation
-│       ├── ppc_analysis.py           # Representative subject fit plots
-│       └── ppc_popu_analysis.py      # Population PPC histograms
-|
-├── artifacts/                        # Intermediate/final model outputs (e.g., trained models, posteriors)
-│   └── sbi_txf/                      # Transformer/SBI specific artifacts
-│       ├── encoder.pt                # Trained Transformer encoder
-│       └── posterior_summary_all.csv # Inferred parameter means for all subjects
-|
-└── scripts/                          # All HPC/SLURM and utility scripts
-    ├── run_pipeline.sh               # Executes the full SBI pipeline on HPC
-    ├── run_embedding.sh              # Executes embedding generation on HPC
-    ├── run_ppc.sh                    # Executes PPC simulation on HPC
-    └── README.md                     # Project documentation
+│   ├── outputs/                            # Model weights and inference results
+│   │   ├── encoder.pt                      # Trained Transformer encoder
+│   │   ├── posterior_summary.csv           # Inferred parameter means for all subjects
+│   │   ├── recovery_details.csv            # Detailed recovery metrics per subject
+│   │   └── embeddings.csv                  # Extracted summary statistic embeddings
+│   │   stats_beh_full.csv
+
+│   └── slurm/                              # All HPC/SLURM and utility scripts
+│       ├── run_pipeline.sh                 # Executes the full SBI pipeline on HPC
+│       ├── run_embedding.sh                # Executes embedding generation on HPC
+│       └── run_ppc.sh                      # Executes PPC simulation on HPC
+│
+└── README.md                               # Project documentation
 ```

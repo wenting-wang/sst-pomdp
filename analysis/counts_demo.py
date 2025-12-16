@@ -5,14 +5,14 @@ from typing import Iterable, Optional, Union, List, Tuple
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs (This file already contains merged demographics and stats)
-DATA_CSV = WORK_DIR / "stats_beh_full.csv"
+DATA_CSV = OUT_DIR / "stats_beh_full.csv"
 
 # Output
-OUTPUT_TEX = WORK_DIR / "counts_demo.tex"
+OUTPUT_TEX = OUT_DIR / "counts_demo.tex"
 
 
 # --- Helper Functions ---
@@ -228,11 +228,6 @@ def main():
             df_baseline,
             outfile=OUTPUT_TEX
         )
-
-        # 4. Quick IQ check (optional)
-        iq_ser = pd.to_numeric(df_baseline["iq"], errors="coerce")
-        print("\nIQ Tertiles used (0, 33%, 66%, 100%):")
-        print(iq_ser.quantile([0, 1/3, 2/3, 1]).to_string())
 
     except Exception as e:
         print(f"An error occurred: {e}")

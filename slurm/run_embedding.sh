@@ -12,14 +12,14 @@ set -eo pipefail
 # ==========================================
 # CONFIGURATION
 # ==========================================
-SST_FOLDER="/home/wwang/data/sst_valid_raw"        # Data source (Needs to match CLEAN_DATA_DIR in filter.py)
-CSV_FILE="stats_beh_full.csv"                # Subject list (In submit dir)
-OUTPUT_FILE="subject_embeddings.csv"             # Output filename
-OUTPUT_DIR="${SLURM_SUBMIT_DIR}"                  # Final destination for results
+SST_FOLDER="/home/wwang/data/sst_valid_raw"     # Data source (Needs to match CLEAN_DATA_DIR in filter.py)
+CSV_FILE="stats_beh_full.csv"                   # Subject list (In submit dir)
+OUTPUT_FILE="embeddings.csv"                    # Output filename
+OUTPUT_DIR="${SLURM_SUBMIT_DIR}"                # Final destination for results
 
 # Absolute path to your existing trained model (encoder.pt)
 # NOTE: This path must exist before the job starts.
-SOURCE_MODEL_PATH="/home/wwang/ptmp/823879/artifacts_sbi_txf/encoder.pt"
+SOURCE_MODEL_PATH="/home/wwang/outputs/encoder.pt"
 
 CONDA_ENV="pymc_env"
 

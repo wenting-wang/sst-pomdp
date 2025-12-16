@@ -6,22 +6,22 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 # Custom Modules (Ensure these are in the same folder)
-from preprocessing import preprocessing
-from pomdp import POMDP
-from metrics import get_distance
+from utils.preprocessing import preprocessing
+from model.pomdp import POMDP
+from utils.metrics import get_distance
 
 # --- Configuration ---
 
 # ==========================================
 # OPTION 1: Local / Mac Configuration (Active)
 # ==========================================
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 RAW_DATA_DIR = BASE_DIR / "sst_valid_raw"
 VALID_FILES_LIST = BASE_DIR / "sst_valid_filenames.txt"
-POSTERIOR_SUMMARY_CSV = WORK_DIR / "posterior_summary_all.csv"
-OUTPUT_PPC_CSV = WORK_DIR / "ppc_metrics.csv"
+POSTERIOR_SUMMARY_CSV = OUT_DIR / "posterior_summary.csv"
+OUTPUT_PPC_CSV = OUT_DIR / "ppc_metrics.csv"
 
 
 # ==========================================
@@ -34,7 +34,7 @@ OUTPUT_PPC_CSV = WORK_DIR / "ppc_metrics.csv"
 # # Input Files
 # # Note: This script supports both .txt (list of filenames) and .csv (dataframe with 'filename' col)
 # VALID_FILES_LIST = Path("/home/wwang/sst_valid_filenames.csv") 
-# POSTERIOR_SUMMARY_CSV = Path("/home/wwang/ptmp/823879/artifacts_sbi_txf/posterior_summary_all.csv")
+# POSTERIOR_SUMMARY_CSV = Path("/home/wwang/ptmp/823879/outputs/posterior_summary.csv")
 
 # # Output File
 # OUTPUT_PPC_CSV = Path("/home/wwang/823879/ppc_metrics.csv")

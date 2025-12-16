@@ -71,8 +71,8 @@ from sbi.utils import BoxUniform
 
 # Local modules
 try:
-    from preprocessing import preprocessing
-    from pomdp import POMDP
+    from utils.preprocessing import preprocessing
+    from model.pomdp import POMDP
 except ImportError:
     # Placeholder for linting/testing without local modules
     def preprocessing(fp): raise NotImplementedError("preprocessing module missing")
@@ -104,7 +104,7 @@ FIXED_PARAMS = {
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
 
 # Artifact Paths
-ART_DIR = Path("artifacts_sbi_txf")
+ART_DIR = Path("outputs")
 ENC_PATH = ART_DIR / "encoder.pt"
 STD_MEAN_PATH = ART_DIR / "embeds_mean.npy"
 STD_STD_PATH = ART_DIR / "embeds_std.npy"

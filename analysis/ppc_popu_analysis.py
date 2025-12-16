@@ -5,15 +5,15 @@ from pathlib import Path
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Input Files
-PPC_METRICS_CSV = WORK_DIR / "ppc_metrics.csv" # Output from ppc.py
-SUBJECT_FILTER_CSV = WORK_DIR / "stats_beh_full.csv"
+PPC_METRICS_CSV = OUT_DIR / "ppc_metrics.csv" # Output from ppc.py
+SUBJECT_FILTER_CSV = OUT_DIR / "stats_beh_full.csv"
 
 # Output File
-OUTPUT_IMAGE = WORK_DIR / "ppc_popu.png" # population
+OUTPUT_IMAGE = OUT_DIR / "ppc_popu.png" # population
 
 # Plotting Configuration
 PLOT_COLS = [

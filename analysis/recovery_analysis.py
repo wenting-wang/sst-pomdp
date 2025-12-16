@@ -6,15 +6,14 @@ from pathlib import Path
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
-ARTIFACTS_DIR = Path("/Users/w/Desktop/artifacts_sbi_txf_823879")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
-RECOVERY_CSV = ARTIFACTS_DIR / "recovery_details.csv"
+RECOVERY_CSV = OUT_DIR / "recovery.csv"
 
 # Output
-OUTPUT_PLOT = WORK_DIR / "param_recovery.png"
+OUTPUT_PLOT = OUT_DIR / "param_recovery.png"
 
 # Parameters Config
 PARAMS = [

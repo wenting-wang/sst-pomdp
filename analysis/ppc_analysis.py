@@ -1,3 +1,9 @@
+import sys
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.patches import Patch
@@ -6,23 +12,22 @@ import pandas as pd
 from pathlib import Path
 
 # Custom Modules
-from pomdp import POMDP
-from preprocessing import preprocessing
+from model.pomdp import POMDP
+from utils.preprocessing import preprocessing
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
-ARTIFACTS_DIR = Path("/Users/w/Desktop/artifacts_sbi_txf_823879")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
 RAW_DATA_DIR = BASE_DIR / "sst_valid_raw"
-FILTER_CSV = WORK_DIR / "stats_beh_full.csv"
-PPC_METRICS_CSV = WORK_DIR / "ppc_metrics.csv"  # Output from ppc.py
-PARAMS_CSV = ARTIFACTS_DIR / "posterior_summary_all.csv"
+FILTER_CSV = OUT_DIR / "stats_beh_full.csv"
+PPC_METRICS_CSV = OUT_DIR / "ppc_metrics.csv"  # Output from ppc.py
+PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
 
 # Output
-OUTPUT_IMAGE = WORK_DIR / "ppc.png" # representative subjects
+OUTPUT_IMAGE = OUT_DIR / "ppc.png" # representative subjects
 
 # Plot Settings
 COLOR_OBS = 'k'      # Black

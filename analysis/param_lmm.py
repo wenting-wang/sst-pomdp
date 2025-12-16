@@ -5,16 +5,15 @@ from pathlib import Path
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path("/Users/w/Desktop/data")
-WORK_DIR = Path("/Users/w/sst-abcd-adhd-mac/clean_version_within")
-ARTIFACTS_DIR = Path("/Users/w/Desktop/artifacts_sbi_txf_823879")
+BASE_DIR = Path('/kyb/agpd/wwang/data/')
+OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
-PARAMS_CSV = ARTIFACTS_DIR / "posterior_summary_all.csv"
-STATS_CSV = WORK_DIR / "stats_beh_full.csv"
+PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
+STATS_CSV = OUT_DIR / "stats_beh_full.csv"
 
 # Output
-OUTPUT_TEX = WORK_DIR / "lmm_results_table.tex"
+OUTPUT_TEX = OUT_DIR / "lmm_results.tex"
 
 # Analysis Config
 # Parameters to analyze
@@ -223,8 +222,8 @@ def main():
         if not results_df.empty:
             latex_code = build_latex_table(results_df)
             
-            print("\n--- LaTeX Table Output ---\n")
-            print(latex_code)
+            # print("\n--- LaTeX Table Output ---\n")
+            # print(latex_code)
             
             with open(OUTPUT_TEX, "w") as f:
                 f.write(latex_code)
