@@ -66,50 +66,46 @@ For improved clarity, modularity, and long-term maintenance, it is highly recomm
 
 ```
 .
-├── data/                                   # Raw data
-│   ├── abcd_sst_tlb01/                     # Original raw files
-│   ├── sst_valid_raw/                      # Cleaned, filtered raw files
-│   ├── abcd_p_demo.csv
-│   ├── mh_p_cbcl.csv
-│   ├── mri_y_tfmr_sst_beh.csv
-│   ├── nc_y_wisc.csv
-│   ├── ph_p_meds.csv
-│   └── sst_valid_filenames.txt
+├── analysis/                         # Analysis and plotting scripts
+│   ├── counts_demo.py                # Demographics table generation
+│   ├── param_analysis.py             # Parameter distribution plots
+│   ├── param_lmm.py                  # LMM for parameter-trait correlation
+│   ├── ppc_analysis.py               # Representative subject fit plots
+│   ├── ppc_popu_analysis.py          # Population PPC histograms
+│   └── recovery_analysis.py          # Parameter recovery analysis
 │
-├── sst-pomdp/                              # Main source code and scripts
-│   ├── model/                              # Core math and model definition
-│   │   └── pomdp.py                        # POMDP model definition
-│   │
-│   ├── utils/                              # Data cleaning and feature extraction
-│   │   ├── filter.py                       # QC filtering
-│   │   ├── stats.py                        # Behavioral stats calculation
-│   │   ├── preprocessing.py                # Trial-level cleaning/discretization
-│   │   └── metrics.py                      # Behavioral and distance metrics
-│   │
-│   ├── inference/                          # SBI (Transformer + SNPE) components
-│   │   ├── pipeline_transformer_snpe.py    # End-to-end SBI logic
-│   │   └── embedding.py                    # Subject embedding extraction
-│   │   ppc.py
-
-│   ├── analysis/                           # Parameter analysis, LMMs, and PPC plotting
-│   │   ├── param_analysis.py               # Parameter distribution plots
-│   │   ├── param_lmm.py                    # LMM for parameter-trait correlation
-│   │   ├── count_demo.py                   # Demographics table generation
-│   │   ├── ppc_analysis.py                 # Representative subject fit plots
-│   │   ├── ppc_popu_analysis.py            # Population PPC histograms
-│   │   └── recovery_analysis.py            # Parameter recovery analysis
-│   │
-│   ├── outputs/                            # Model weights and inference results
-│   │   ├── encoder.pt                      # Trained Transformer encoder
-│   │   ├── posterior_summary.csv           # Inferred parameter means for all subjects
-│   │   ├── recovery_details.csv            # Detailed recovery metrics per subject
-│   │   └── embeddings.csv                  # Extracted summary statistic embeddings
-│   │   stats_beh_full.csv
-
-│   └── slurm/                              # All HPC/SLURM and utility scripts
-│       ├── run_pipeline.sh                 # Executes the full SBI pipeline on HPC
-│       ├── run_embedding.sh                # Executes embedding generation on HPC
-│       └── run_ppc.sh                      # Executes PPC simulation on HPC
+├── inference/                        # SBI and Inference logic
+│   ├── embedding.py                  # Subject embedding extraction
+│   ├── pipeline_transformer_snpe.py  # End-to-end SBI logic
+│   └── ppc.py                        # Posterior Predictive Check simulation logic
 │
-└── README.md                               # Project documentation
+├── model/                            # Model definitions
+│   └── pomdp.py                      # POMDP model class and math
+│
+├── outputs/                          # Generated results, plots, and tables
+│   ├── counts_demo.tex               # Demographics table (LaTeX)
+│   ├── embeddings.csv                # Extracted summary statistic embeddings
+│   ├── encoder.pt                    # Trained Transformer encoder weights
+│   ├── lmm_results.tex               # LMM analysis results (LaTeX)
+│   ├── param_recovery.png            # Parameter recovery plot
+│   ├── parameters.png                # Parameter distribution plot
+│   ├── posterior_summary.csv         # Inferred parameter means for all subjects
+│   ├── ppc.png                       # PPC representative subject plot
+│   ├── ppc_metrics.csv               # Goodness-of-fit metrics
+│   ├── ppc_popu.png                  # Population PPC histogram plot
+│   ├── recovery.csv                  # Recovery analysis source data
+│   └── stats_beh_full.csv            # Full calculated behavioral statistics
+│
+├── slurm/                            # HPC execution scripts
+│   ├── run_embedding.sh              # Job script: Embedding generation
+│   ├── run_pipeline.sh               # Job script: Full SBI pipeline
+│   └── run_ppc.sh                    # Job script: PPC simulation
+│
+├── utils/                            # Shared utility functions
+│   ├── filter.py                     # QC and data filtering
+│   ├── metrics.py                    # Behavioral and distance metrics
+│   ├── preprocessing.py              # Trial-level data cleaning
+│   └── stats.py                      # Behavioral statistics calculation
+│
+└── README.md                         # Project documentation
 ```
