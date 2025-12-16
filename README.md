@@ -57,3 +57,48 @@ These scripts analyze the inferred parameters and generate final summary tables.
 | **`param_analysis.py`** | Loads the inferred model parameters (MAP estimates), computes summary statistics (mean, median, range), and generates distribution plots (histograms with KDE overlays) for the key cognitive parameters. |
 | **`param_lmm.py`** | Performs statistical analysis using Linear Mixed-Effects Models (LMM) to quantify the relationship between inferred cognitive parameters and clinical traits (e.g., ADHD), controlling for covariates (Sex, IQ, Medication). Outputs a formatted LaTeX table of the results. |
 | **`count_demo.py`** | Generates a demographic summary table (LaTeX format) displaying subject counts stratified by key groups (ADHD score, Sex, IQ tertiles, Medication status). |
+
+---
+
+### V. Proposed Folder Structure for Organization
+
+For improved clarity, modularity, and long-term maintenance, it is highly recommended to arrange the files into a functional subfolder structure.
+
+```
+sst-pomdp/
+├── data/                             # Raw and processed external data
+│   ├── raw_abcd_sst/                 # Original raw files (e.g., zips)
+│   └── sst_valid_raw/                # Cleaned, filtered raw files (used by the pipeline)
+|
+├── src/                              # All Python code for the pipeline
+│   ├── model_core/                   # Core math and model definition
+│   │   ├── pomdp.py                  # POMDP model definition
+│   │   └── metrics.py                # Behavioral and distance metrics
+│   │
+│   ├── data_prep/                    # Data cleaning and feature extraction
+│   │   ├── filter.py                 # QC filtering
+│   │   ├── stats.py                  # Behavioral stats calculation
+│   │   └── preprocessing.py          # Trial-level cleaning/discretization
+│   │
+│   ├── sbi_inference/                # SBI (Transformer + SNPE) components
+│   │   ├── pipeline_transformer_snpe.py # End-to-end SBI logic
+│   │   └── embedding.py              # Subject embedding extraction
+│   │
+│   └── analysis/                     # Parameter analysis, LMMs, and PPC plotting
+│       ├── param_analysis.py         # Parameter distribution plots
+│       ├── param_lmm.py              # LMM for parameter-trait correlation
+│       ├── count_demo.py             # Demographics table generation
+│       ├── ppc_analysis.py           # Representative subject fit plots
+│       └── ppc_popu_analysis.py      # Population PPC histograms
+|
+├── artifacts/                        # Intermediate/final model outputs (e.g., trained models, posteriors)
+│   └── sbi_txf/                      # Transformer/SBI specific artifacts
+│       ├── encoder.pt                # Trained Transformer encoder
+│       └── posterior_summary_all.csv # Inferred parameter means for all subjects
+|
+└── scripts/                          # All HPC/SLURM and utility scripts
+    ├── run_pipeline.sh               # Executes the full SBI pipeline on HPC
+    ├── run_embedding.sh              # Executes embedding generation on HPC
+    ├── run_ppc.sh                    # Executes PPC simulation on HPC
+    └── README.md                     # Project documentation
+```
