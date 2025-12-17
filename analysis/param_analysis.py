@@ -36,7 +36,7 @@ PARAM_DISPLAY_NAMES = {
 }
 
 # Visualization Settings
-FILL_COLOR = "#4A2470"
+FILL_COLOR = "#413D7B"
 EDGE_COLOR = "#ffffff"
 BINS = 30
 
@@ -126,7 +126,7 @@ def plot_parameter_distributions(df, params, output_path):
         ax.hist(
             data, bins=BINS,
             color=FILL_COLOR, edgecolor=EDGE_COLOR,
-            alpha=0.5, linewidth=0.8, density=True
+            alpha=0.7, linewidth=0.8, density=True
         )
         
         # 2. KDE Line
@@ -138,7 +138,8 @@ def plot_parameter_distributions(df, params, output_path):
 
         # 3. Styling
         label = PARAM_DISPLAY_NAMES.get(param, param)
-        ax.set_xlabel(label, fontsize=14)
+        ax.set_xlabel('')
+        ax.set_title(label, fontsize=14)
         
         if i % ncols == 0:
             ax.set_ylabel("Posterior mean density", fontsize=12)
