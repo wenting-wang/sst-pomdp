@@ -218,6 +218,7 @@ def plot_model_fit(subjects, raw_data_dir, params_file, output_path):
         ax.set_xlabel("Trials", fontsize=10)
         if col_idx == 0: ax.set_ylabel("SSD", fontsize=12)
         _clean_spines(ax)
+        ax.set_ylim(0, 37)
 
         # Row 4: Inhibition Function
         ax = axs[4, col_idx]
