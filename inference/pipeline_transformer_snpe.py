@@ -1,5 +1,6 @@
 """
-pipeline_transformer_snpe.py
+pipeline_transformer_snpe.py 
+(run on HPC cluster using run_pipeline.sh)
 
 End-to-end SBI with a Transformer-based summary for the POMDP-SST simulator.
 
