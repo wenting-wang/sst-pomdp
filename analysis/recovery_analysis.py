@@ -1,8 +1,12 @@
+import sys
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent)) 
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
-from pathlib import Path
 
 # --- Configuration & Paths ---
 

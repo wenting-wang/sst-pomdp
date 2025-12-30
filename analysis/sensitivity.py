@@ -1,42 +1,48 @@
+import sys
 import os
 import csv
 import math
 import multiprocessing as mp
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- Custom Imports (Ensure these files are in your python path) ---
+# --- PATH SETUP (Robotic Fix) ---
+# Ensure the script can find the 'model' package in the parent directory
+current_script_dir = Path(__file__).resolve().parent
+project_root = current_script_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+# --- Custom Imports ---
 from utils.metrics import get_stats_mean_sim
 from model.pomdp import POMDP
 
 # =============================================================================
-# CONFIGURATION & PARAMETERS
+# CONFIGURATION
 # =============================================================================
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
 OUTPUT_CSV = OUT_DIR / "sensitivity_res_1d.csv"
+
+# Simulation Settings
+SUBJECT_ID = 'INV7C262RWK'
 N_REPEAT = 10
 BINS = 10
-MAX_WORKERS = mp.cpu_count()
+MAX_WORKERS = max(1, mp.cpu_count() - 2) # Leave a couple of cores free
 EPSILON = 1e-6
 
-# Baseline parameters (N=5918 baseline)
-DEFAULT_PARAMS = {
-    'q_d_n': 0.611,
-    'q_d': 0.683,
-    'q_s_n': 0.062,
-    'q_s': 0.901,
+# Parameters that are constant across all subjects
+FIXED_PARAMS = {
     'cost_go_error': 1.0,
     'cost_go_missing': 1.0,
-    'cost_stop_error': 1.825,
-    'cost_time': 0.0017,
-    'inv_temp': 50.0
+    'inv_temp': 50.0,
+    'rate_stop_trial': 1/6
 }
 
-# Parameters to scan
+# Parameters to scan (Sensitivity Analysis Ranges)
 PARAM_RANGES = {
     "q_d_n": (0.0, 1.0),
     "q_d":   (0.5, 1.0),
@@ -46,10 +52,13 @@ PARAM_RANGES = {
     "cost_time":       (0.0, 0.003),
 }
 
+# Parameters to extract from the CSV for the subject
+DYNAMIC_PARAMS_KEYS = ['q_d_n', 'q_d', 'q_s_n', 'q_s', 'cost_stop_error', 'cost_time']
+
 # Metrics to analyze
 METRIC_NAMES = ["mrt_gs", "ssrt"]
 
-# Plotting Configuration
+# Display Configuration
 PARAM_DISPLAY_NAMES = {
     "q_d_n": r"$\chi'$",
     "q_d": r"$\chi$",
@@ -68,39 +77,64 @@ METRIC_DISPLAY_NAMES = {
 }
 
 # =============================================================================
-# SIMULATION HELPER FUNCTIONS
+# DATA LOADING
+# =============================================================================
+
+def get_subject_params(subject_id, csv_path, fixed_params):
+    """
+    Loads baseline parameters for a specific subject from CSV.
+    """
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Parameter file not found: {csv_path}")
+
+    df = pd.read_csv(csv_path)
+    subject_df = df[df['subject_id'] == subject_id]
+    
+    if subject_df.empty:
+        raise ValueError(f"Subject ID {subject_id} not found in {csv_path}")
+
+    # Convert to dict {param_name: mean_value}
+    param_dict = subject_df.set_index('param')['mean'].to_dict()
+    
+    # Filter only relevant dynamic keys
+    clean_params = {k: param_dict[k] for k in DYNAMIC_PARAMS_KEYS if k in param_dict}
+    
+    # Merge with fixed constants
+    return {**clean_params, **fixed_params}
+
+# =============================================================================
+# SIMULATION FUNCTIONS
 # =============================================================================
 
 def safe_linspace(a, b, bins, eps=1e-3):
-    """Generates a linear space avoiding the exact boundaries by epsilon."""
-    lo = min(a, b)
-    hi = max(a, b)
+    lo, hi = min(a, b), max(a, b)
     return np.linspace(lo + eps, hi - eps, bins)
 
-
-def simulate_and_extract_stat(param_dict, default_params, n_repeat, metric_names):
+def simulate_and_extract_stat(param_dict, baseline_params, n_repeat, metric_names):
     """
-    Runs the POMDP simulation for a specific parameter set and calculates statistics.
+    Runs simulation for a specific test parameter, overriding the baseline.
     """
     stats_buffer = {m: [] for m in metric_names}
 
     try:
-        # Merge default params with the specific parameter being tested
-        test_params = default_params.copy()
+        # Create test params: Start with baseline, overwrite the specific scanned param
+        test_params = baseline_params.copy()
         test_params.update(param_dict)
+        
+        # Pop 'rate_stop_trial' as it is a separate arg in __init__
+        rate_stop = test_params.pop('rate_stop_trial', 1/6)
 
-        # Initialize and solve POMDP
-        pomdp = POMDP(**test_params)
+        # Initialize POMDP
+        pomdp = POMDP(**test_params, rate_stop_trial=rate_stop)
         pomdp.value_iteration_tensor()
 
-        # Run simulations
+        # Run trials
         for _ in range(n_repeat):
             out = pomdp.simu_task()
             df_out = pd.DataFrame(out, columns=["result", "rt", "ssd"])
             stats = get_stats_mean_sim(df_out)
 
-            # Map stats by index (Assuming indices based on perf_within logic)
-            # Index 4: Mean RT on Go Signals, Index 7: SSRT
+            # Map stats by index (4: Mean Go RT, 7: SSRT)
             stat_dict = {
                 "mrt_gs": stats[4],
                 "ssrt": stats[7],
@@ -114,7 +148,7 @@ def simulate_and_extract_stat(param_dict, default_params, n_repeat, metric_names
         for m in metric_names:
             stats_buffer[m] = [np.nan] * n_repeat
 
-    # Prepare rows for CSV output
+    # Format Output
     rows = []
     key = list(param_dict.keys())[0]
     val = float(param_dict[key])
@@ -128,25 +162,21 @@ def simulate_and_extract_stat(param_dict, default_params, n_repeat, metric_names
             "mean": float(np.nanmean(arr)),
             "std": float(np.nanstd(arr)),
         })
-        
     return rows
 
-
-def run_sensitivity_analysis():
+def run_sensitivity_analysis(baseline_params):
     """
-    Orchestrates the parallel simulation of parameters and writes results to CSV.
+    Orchestrates the parallel simulation using the subject's baseline params.
     """
-    # 1. Generate scanning grids
+    # Generate scanning grids
     value_grids = {
         k: safe_linspace(v[0], v[1], BINS, eps=EPSILON)
         for k, v in PARAM_RANGES.items()
     }
 
-    # 2. Setup CSV file
     header = ["param_1", "value_1", "metric", "mean", "std"]
-    if os.path.exists(OUTPUT_CSV):
-        os.remove(OUTPUT_CSV)
-
+    
+    # Overwrite check done in main, so we just write here
     print(f"Starting simulation with {MAX_WORKERS} workers...")
     
     with open(OUTPUT_CSV, "w", newline="") as f:
@@ -156,163 +186,116 @@ def run_sensitivity_analysis():
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = []
             
-            # Submit tasks
             for p_name, values in value_grids.items():
                 for v in values:
+                    # Pass the subject's baseline params to the worker
                     futures.append(executor.submit(
                         simulate_and_extract_stat,
                         {p_name: float(v)},
-                        DEFAULT_PARAMS,
+                        baseline_params,
                         N_REPEAT,
                         METRIC_NAMES
                     ))
 
-            # Process results as they complete
             for i, fut in enumerate(as_completed(futures)):
                 try:
                     rows = fut.result()
                     for row in rows:
                         writer.writerow(row)
-                    
                     if (i + 1) % 10 == 0:
-                        print(f"Progress: {i + 1}/{len(futures)} tasks completed.", end="\r")
-                        
+                        print(f"Progress: {i + 1}/{len(futures)} tasks...", end="\r")
                 except Exception as e:
-                    print(f"\n[ERROR] Future processing failed: {e}")
+                    print(f"\n[ERROR] Worker failed: {e}")
     
     print(f"\nSimulation complete. Results saved to {OUTPUT_CSV}")
 
-
 # =============================================================================
-# PLOTTING FUNCTIONS
+# PLOTTING
 # =============================================================================
 
-def plot_sensitivity_1d(
-    df,
-    metric_name,
-    save_path=None,
-    param_order=None,
-    show_baseline=True,
-    baseline_params=DEFAULT_PARAMS,
-    ncols=3,
-):
-    """
-    Generates 1D sensitivity plots for a specific metric across different parameters.
-    """
-    # Filter data for the specific metric
+def plot_sensitivity_1d(df, metric_name, baseline_params, save_path=None, ncols=3):
     d = df[df["metric"] == metric_name].copy()
-    if d.empty:
-        print(f"No data found for metric: {metric_name}")
-        return
+    if d.empty: return
 
     label_metric = METRIC_DISPLAY_NAMES.get(metric_name, metric_name)
-
-    # Determine parameter order
     params_in_data = list(d["param_1"].dropna().unique())
     
-    if param_order is None:
-        # Default order: prioritize known params, then append others
-        priority_list = ["q_d_n", "q_d", "q_s_n", "q_s", "cost_stop_error", "cost_time"]
-        param_order = [p for p in priority_list if p in params_in_data]
-        param_order += [p for p in params_in_data if p not in priority_list]
-    else:
-        # Filter provided order by what exists in data
-        param_order = [p for p in param_order if p in params_in_data]
+    # Sort order: scanned params first
+    priority_list = list(PARAM_RANGES.keys())
+    param_order = [p for p in priority_list if p in params_in_data]
 
     n_plots = len(param_order)
-    if n_plots == 0:
-        print("No parameters to plot.")
-        return
-
-    # Setup Plot
     nrows = math.ceil(n_plots / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(4.2 * ncols, 3.4 * nrows), squeeze=False)
     
-    # Color settings
     cmap = plt.get_cmap("cividis")
     line_color = cmap(0.7)
 
     for idx, p in enumerate(param_order):
         r, c = divmod(idx, ncols)
         ax = axes[r][c]
-        label_p = PARAM_DISPLAY_NAMES.get(p, p)
-
-        # Prepare sub-data
+        
+        # Plot Data
         sub = d[d["param_1"] == p].copy().sort_values("value_1")
-        x = sub["value_1"].to_numpy()
-        y = sub["mean"].to_numpy()
-        yerr = sub["std"].to_numpy()
-
-        # Plot Line + Error Bars + Shaded Region
+        x, y, yerr = sub["value_1"].to_numpy(), sub["mean"].to_numpy(), sub["std"].to_numpy()
+        
         ax.plot(x, y, color=line_color, linewidth=2)
         ax.fill_between(x, y - yerr, y + yerr, color=line_color, alpha=0.2, linewidth=0)
         ax.errorbar(x, y, yerr=yerr, linestyle="none", capsize=3, color=line_color)
 
-        # Plot Baseline Vertical Line
-        if show_baseline and (p in baseline_params):
+
+        # Plot Baseline Vertical Line (Specific to Subject)
+        if p in baseline_params:
             x0 = baseline_params[p]
             ax.axvline(x0, linestyle="--", linewidth=1.5, alpha=0.9, color="gray")
 
         # Formatting
-        ax.set_xlabel(label_p, fontsize=14)
-        if c == 0:
-            ax.set_ylabel(label_metric, fontsize=14)
-
-        # Special handling for 'cost_time' (small values)
+        ax.set_xlabel(PARAM_DISPLAY_NAMES.get(p, p), fontsize=14)
+        if c == 0: ax.set_ylabel(label_metric, fontsize=14)
+        
         if p == "cost_time":
-            xmin, xmax = float(np.nanmin(x)), float(np.nanmax(x))
-            x_range = xmax - xmin
-            ax.set_xlim(xmin - 0.05 * x_range, xmax + 0.05 * x_range)
-            
-            # Format ticks for small numbers
-            xticks = np.linspace(xmin, xmax, 5)
-            ax.set_xticks(xticks)
-            ax.set_xticklabels([f"{t:.3g}" for t in xticks])
+            ax.set_xticks(np.linspace(min(x), max(x), 4))
+            ax.ticklabel_format(axis='x', style='sci', scilimits=(0,0))
 
-        # Y-Axis Limits (Hardcoded based on requirements)
         ax.set_ylim(100, 700)
 
-    # Hide empty subplots
+    # Clean up empty subplots
     for k in range(n_plots, nrows * ncols):
-        r, c = divmod(k, ncols)
-        axes[r][c].axis("off")
+        axes.flat[k].axis("off")
 
     plt.tight_layout()
     if save_path:
-        print(f"Saving plot to {save_path}")
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Saved plot: {save_path}")
+
 
 # =============================================================================
-# MAIN EXECUTION
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
-    # 1. Run the Simulation only if the output file does not exist
-    if os.path.exists(OUTPUT_CSV):
-        print(f"File '{OUTPUT_CSV}' already exists. Skipping simulation step.")
-    else:
-        print(f"File '{OUTPUT_CSV}' not found. Starting simulation...")
-        run_sensitivity_analysis()
+    try:
+        # 1. Load Subject Parameters
+        print(f"Loading parameters for Subject: {SUBJECT_ID}...")
+        subject_params = get_subject_params(SUBJECT_ID, PARAMS_CSV, FIXED_PARAMS)
+        
+        # 2. Run Simulation (if output doesn't exist)
+        if os.path.exists(OUTPUT_CSV):
+            print(f"File '{OUTPUT_CSV}' exists. Skipping simulation.")
+        else:
+            run_sensitivity_analysis(subject_params)
 
-    # 2. Load Data and Plot
-    if os.path.exists(OUTPUT_CSV):
-        try:
+        # 3. Plot Results
+        if os.path.exists(OUTPUT_CSV):
             df = pd.read_csv(OUTPUT_CSV)
-            
-            # Replace 0 placeholders with NaN for cleaner plotting
             df.replace(0, np.nan, inplace=True)
 
-            # 3. Generate Plots for each metric
             for metric in METRIC_NAMES:
                 plot_sensitivity_1d(
                     df, 
                     metric,
-                    # Using Path syntax as requested
-                    save_path=OUT_DIR / f"sensitivity_{metric}_1d.png",
-                    show_baseline=True,
-                    ncols=3
+                    baseline_params=subject_params, # Pass subject params for vertical lines
+                    save_path=OUT_DIR / f"sensitivity_{metric}_1d.png"
                 )
-        except Exception as e:
-            print(f"[ERROR] An error occurred while processing the CSV: {e}")
-    else:
-        print(f"[ERROR] {OUTPUT_CSV} could not be found. Cannot generate plots.")
+    except Exception as e:
+        print(f"[CRITICAL ERROR] {e}")

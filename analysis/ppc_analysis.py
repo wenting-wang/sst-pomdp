@@ -1,15 +1,13 @@
 import sys
-import os
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent)) 
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 # Custom Modules
 from model.pomdp import POMDP

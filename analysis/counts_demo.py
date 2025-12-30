@@ -1,6 +1,10 @@
+import sys
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent)) 
+
 import pandas as pd
 import numpy as np
-from pathlib import Path
 from typing import Iterable, Optional, Union, List, Tuple
 
 # --- Configuration & Paths ---

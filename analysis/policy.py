@@ -1,104 +1,57 @@
+import sys
 import pandas as pd
-from model.pomdp import POMDP
 from pathlib import Path
 
+# Fix path to allow importing 'model'
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent))
 
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
+from model.pomdp import POMDP
+
+# --- Configuration ---
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
-
-# Inputs
 PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
-STATS_CSV = OUT_DIR / "stats_beh_full.csv"
+SUBJECT_ID = 'INV7C262RWK'
 
-# Parameter Selection Method: 'mode', 'mean', or 'median'
-METHOD = 'mode'
-
-# Default parameters to use if data files are not found (derived from 'baseline' mode)
-DEFAULT_PARAMS = {
-    'q_d_n': 0.611, 
-    'q_d': 0.683, 
-    'q_s_n': 0.062, 
-    'q_s': 0.901, 
+FIXED_PARAMS = {
     'cost_go_error': 1.0, 
     'cost_go_missing': 1.0, 
-    'cost_stop_error': 1.825, 
-    'cost_time': 0.0017, 
-    'inv_temp': 50.0
+    'inv_temp': 50.0,
+    'rate_stop_trial': 1/6
 }
 
-# =============================================================================
-# DATA LOADING FUNCTIONS
-# =============================================================================
+# Params to extract from CSV
+DYNAMIC_KEYS = ['q_d_n', 'q_d', 'q_s_n', 'q_s', 'cost_stop_error', 'cost_time']
 
-def load_parameters(posterior_path, stats_path, method='mode'):
-    """
-    Loads posterior summaries and demographic stats to calculate 
-    parameters for the baseline year using the specified method.
-    
-    Args:
-        posterior_path (Path): Path to the posterior summary CSV.
-        stats_path (Path): Path to the stats CSV.
-        method (str): Method to aggregate parameters ('mode', 'mean', 'median').
+# --- Helper ---
+def get_subject_params(subject_id, path):
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
         
-    Returns:
-        dict: A dictionary of parameter values.
-    """
-    if not posterior_path.exists() or not stats_path.exists():
-        print(f"[WARN] Data files not found at specified paths. Using default hardcoded parameters.")
-        return DEFAULT_PARAMS
-
-    print(f"Loading data to calculate parameters using method: '{method}'...")
+    df = pd.read_csv(path)
+    sub_df = df[df['subject_id'] == subject_id]
     
-    # 1. Load and Pivot Posterior Data
-    df_param = pd.read_csv(posterior_path)
-    df_param = df_param.rename(columns={"subject_year": "year"})
+    if sub_df.empty:
+        raise ValueError(f"Subject {subject_id} not found in {path}")
+
+    # Extract dynamic params and merge with fixed
+    p_dict = sub_df.set_index('param')['mean'].to_dict()
+    dynamic = {k: p_dict[k] for k in DYNAMIC_KEYS if k in p_dict}
+    return {**dynamic, **FIXED_PARAMS}
+
+# --- Execution ---
+if __name__ == "__main__":
+    print(f"Loading params for {SUBJECT_ID}...")
+    params = get_subject_params(SUBJECT_ID, PARAMS_CSV)
     
-    # Reshape: one row per subject/year, columns for each parameter mean
-    df_param_pivot = df_param.pivot(
-        index=['subject_id', 'year'], 
-        columns='param', 
-        values='mean'
-    ).reset_index()
-    df_param_pivot.columns.name = None
+    # Separate rate_stop_trial (passed as named arg)
+    rate_stop = params.pop('rate_stop_trial')
 
-    # 2. Load Stats Data and Merge
-    df_stats = pd.read_csv(stats_path)
-    df = pd.merge(df_stats, df_param_pivot, on=['subject_id', 'year'], how='inner')
-    df = df.dropna()
+    print("Running Value Iteration...")
+    pomdp = POMDP(**params, rate_stop_trial=rate_stop)
+    pomdp.value_iteration_tensor()
 
-    # 3. Filter for Baseline
-    df_baseline = df[df['year'] == 'baseline']
-
-    if df_baseline.empty:
-        raise ValueError("Merged dataframe is empty after filtering for 'baseline'.")
-
-    # 4. Extract Parameters based on Method
-    param_keys = list(DEFAULT_PARAMS.keys())
-    
-    if method == 'mode':
-        # Mode returns a DataFrame, so we take the first row and convert to dict
-        # We round to 3 decimals to ensure we find a meaningful mode
-        params = df_baseline[param_keys].round(3).mode().to_dict(orient='records')[0]
-    
-    elif method == 'mean':
-        # Mean returns a Series, convertible directly to dict
-        params = df_baseline[param_keys].mean().to_dict()
-        
-    elif method == 'median':
-        # Median returns a Series, convertible directly to dict
-        params = df_baseline[param_keys].median().to_dict()
-        
-    else:
-        raise ValueError(f"Unknown method '{method}'. Choose 'mode', 'mean', or 'median'.")
-
-    return params
-
-params = load_parameters(PARAMS_CSV, STATS_CSV, method=METHOD)
-
-pomdp = POMDP(**params)
-pomdp.value_iteration_tensor() # 2 sec locally
-
-pomdp.plot_policy_simple(OUT_DIR / 'policy_selected.png',
-                         dpi=300, selected_timesteps=[0, 16, 38, 39])
-
-pomdp.plot_policy(OUT_DIR / 'policy_full.png', dpi=300)
+    print("Generating Plots...")
+    pomdp.plot_policy_simple(OUT_DIR / 'policy_selected.png', dpi=300, selected_timesteps=[0, 37, 38, 39])
+    pomdp.plot_policy(OUT_DIR / 'policy_full.png', dpi=300)
+    print("Done.")

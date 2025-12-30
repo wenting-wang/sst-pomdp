@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent)) 
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,7 +11,6 @@ import plotly.graph_objects as go
 from plotly.offline import plot
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from pathlib import Path
 
 # ==========================================
 # 0. CONFIGURATION & CONSTANTS
@@ -124,7 +128,7 @@ def run_pca_2d(df):
         ax = axes[i]
         if var in df.columns:
             # Robust scaling for color mapping
-            vmin, vmax = df[var].quantile([0.01, 0.99])
+            vmin, vmax = df[var].quantile([0.01, 0.999])
             
             sc = ax.scatter(
                 df['pca_1'], df['pca_2'], 

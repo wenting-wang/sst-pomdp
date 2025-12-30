@@ -794,7 +794,6 @@ class POMDP:
             # Make sure layout is applied before saving
             fig.canvas.draw()
             fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.02)
-            plt.show()
             plt.close(fig)
         else:
             plt.show()
@@ -866,14 +865,14 @@ class POMDP:
             axis.plot(x_range, wait_mean, label=r'$Q^\nu_t(b^\nu_t, W)$',
                       color=colors["Q_W"], linewidth=1.5)
             axis.fill_between(x_range, wait_mean - wait_sem,
-                              wait_mean + wait_sem, color='lightgray', alpha=0.5)
+                              wait_mean + wait_sem, color=colors["Q_W"], alpha=0.5)
 
             # Trial samples
             for j in range(min(show_cnt, len(df))):
                 axis.plot(x_range, df.iloc[j]['value_left_seq'],
                           color=colors["Q_L"], alpha=0.6, linewidth=0.8)
                 axis.plot(
-                    x_range, df.iloc[j]['value_right_seq'], color=colors['Q_W'], alpha=0.6, linewidth=0.8)
+                    x_range, df.iloc[j]['value_right_seq'], color=colors['Q_R'], alpha=0.6, linewidth=0.8)
                 axis.plot(x_range, df.iloc[j]['value_wait_seq'],
                           color=colors['Q_W'], alpha=0.6, linewidth=0.8)
 
@@ -925,7 +924,6 @@ class POMDP:
             # Make sure layout is applied before saving
             fig.canvas.draw()
             fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.02)
-            plt.show()
             plt.close(fig)
         else:
             plt.show()

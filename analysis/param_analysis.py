@@ -1,7 +1,11 @@
+import sys
+from pathlib import Path
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent)) 
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from pathlib import Path
 
 # --- Configuration & Paths ---
 
