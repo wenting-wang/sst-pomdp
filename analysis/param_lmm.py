@@ -1,14 +1,12 @@
 import sys
 from pathlib import Path
-current_dir = Path(__file__).resolve().parent
-sys.path.append(str(current_dir.parent)) 
-
 import pandas as pd
 import numpy as np
 import statsmodels.formula.api as smf
 
 # --- Configuration & Paths ---
 
+# Update these paths if necessary
 BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
@@ -20,10 +18,8 @@ STATS_CSV = OUT_DIR / "stats_beh_full.csv"
 OUTPUT_TEX = OUT_DIR / "lmm_results.tex"
 
 # Analysis Config
-# Parameters to analyze
 PARAMS_OF_INTEREST = ['q_d_n', 'q_d', 'q_s_n', 'q_s', 'cost_stop_error', 'cost_time']
 
-# Display names for LaTeX
 PARAM_DISPLAY_NAMES = {
     'q_d_n': r"$\chi'$",
     'q_d': r"$\chi$",
@@ -44,12 +40,12 @@ def load_and_prep_data(params_path, stats_path):
     if not params_path.exists() or not stats_path.exists():
         raise FileNotFoundError("Input files not found.")
 
-    # 1. Load Parameters (Long format -> Wide format)
+    # 1. Load Parameters
     df_param = pd.read_csv(params_path)
     if 'subject_year' in df_param.columns:
         df_param = df_param.rename(columns={"subject_year": "year"})
     
-    # Pivot: One row per subject/year, columns for each param
+    # Pivot
     df_pivot = df_param.pivot(
         index=['subject_id', 'year'], 
         columns='param', 
@@ -57,29 +53,27 @@ def load_and_prep_data(params_path, stats_path):
     ).reset_index()
     df_pivot.columns.name = None
 
-    # 2. Load Stats/Demographics
+    # 2. Load Stats
     df_stats = pd.read_csv(stats_path)
     
     # 3. Merge
     df_merged = pd.merge(df_stats, df_pivot, on=['subject_id', 'year'], how='inner')
     
-    # 4. Filter for Baseline Only (as requested)
+    # 4. Filter for Baseline
     df_clean = df_merged[df_merged['year'] == 'baseline'].dropna().copy()
     
     print(f"Data Loaded. N={len(df_clean)} subjects (Baseline).")
     return df_clean
 
 
-def fit_mixed_models(df, params):
+def fit_linear_models(df, params):
     """
-    Fits Linear Mixed-Effects Models (random intercept by subject) for each parameter.
+    Fits Multiple Linear Regression (OLS) models.
     """
     rows = []
-    
-    # Predictors: ADHD (main), Sex, IQ, Medication (covariates)
     formula_template = "{target} ~ adhd + C(sex) + iq + adhd_med_flag"
 
-    print(f"Fitting MixedLM models for: {params}...")
+    print(f"Fitting OLS models for: {params}...")
 
     for target_param in params:
         if target_param not in df.columns:
@@ -91,29 +85,21 @@ def fit_mixed_models(df, params):
             continue
         
         try:
-            # MixedLM: random intercept per subject
-            model = smf.mixedlm(
+            # OLS Model
+            model = smf.ols(
                 formula=formula_template.format(target=target_param), 
-                data=dsub, 
-                groups=dsub["subject_id"], 
-                re_formula="1"
+                data=dsub
             )
-            
-            # Fit model (using LBFGS for robustness)
-            result = model.fit(method="lbfgs", reml=True, maxiter=200, disp=False)
+            result = model.fit()
 
-            # Helper to safely extract terms
+            # Helper
             def get_term(term):
                 if term in result.params.index:
-                    return (
-                        result.params[term],
-                        result.bse[term],
-                        result.pvalues[term]
-                    )
+                    return (result.params[term], result.bse[term], result.pvalues[term])
                 else:
                     return (np.nan, np.nan, np.nan)
 
-            # Extract Coefficients
+            # Extract terms
             intercept, int_se, int_p = get_term('Intercept')
             adhd, adhd_se, adhd_p = get_term('adhd')
             sex, sex_se, sex_p = get_term('C(sex)[T.Male]')
@@ -123,20 +109,11 @@ def fit_mixed_models(df, params):
             rows.append({
                 'param': target_param,
                 'param_label': PARAM_DISPLAY_NAMES.get(target_param, target_param),
-                # Intercept
                 'Intercept': intercept, 'Intercept_se': int_se, 'Intercept_p': int_p,
-                # ADHD
                 'ADHD': adhd, 'ADHD_se': adhd_se, 'ADHD_p': adhd_p,
-                # Sex
                 'Sex': sex, 'Sex_se': sex_se, 'Sex_p': sex_p,
-                # IQ
                 'IQ': iq, 'IQ_se': iq_se, 'IQ_p': iq_p,
-                # Medication
                 'Medication': med, 'Medication_se': med_se, 'Medication_p': med_p,
-                # Diagnostics
-                'N_obs': int(result.nobs),
-                'N_subjects': int(dsub['subject_id'].nunique()),
-                'Var_intercept': float(result.cov_re.iloc[0,0]) if result.cov_re is not None else np.nan,
             })
             
         except Exception as e:
@@ -146,7 +123,7 @@ def fit_mixed_models(df, params):
 
 
 def build_latex_table(summary_df):
-    """Generates the LaTeX table string from the results dataframe."""
+    """Generates the LaTeX table string with the caption at the bottom."""
     
     def p_to_stars(p):
         if pd.isna(p): return ""
@@ -169,22 +146,20 @@ def build_latex_table(summary_df):
         stars = p_to_stars(p)
         return f"{val_str}{stars} ({se_str})"
 
-    caption = "Linear mixed-effects results (ADHD main effect; random intercepts by participant; controlling sex, IQ, and medication)"
-    label = "tab:lmm_pomdp_full"
-
+    # --- Table Construction ---
     lines = []
     lines.append(r"\begin{table}[H]")
     lines.append(r"\centering")
-    lines.append(rf"\caption{{{caption}}}")
-    lines.append(rf"\label{{{label}}}")
-    # Columns: Param | Intercept | ADHD | Sex(Male) | IQ | Medication
+    
+    # Note: Caption removed from top, will be added at bottom
+    
     lines.append(r"\begin{tabularx}{\linewidth}{lXXXXX}")
     lines.append(r"\toprule")
     lines.append(r"\textbf{Parameter} & \textbf{Intercept} & \textbf{ADHD} & \textbf{Sex (Male)} & \textbf{IQ} & \textbf{Medication} \\")
     lines.append(r"\midrule")
 
     for _, r in summary_df.iterrows():
-        is_sci = (r['param'] == 'cost_time') # Scientific notation for small parameter
+        is_sci = (r['param'] == 'cost_time')
         
         row = (
             f"{r['param_label']} & "
@@ -198,15 +173,22 @@ def build_latex_table(summary_df):
 
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabularx}")
+    
+    # --- Modified End Section ---
     lines.append(r"\vspace{1mm}")
     lines.append(r"\raggedright")
     lines.append(r"\small")
-    lines.append(
-        r"\textbf{Note.} Linear mixed-effects models with random intercepts by participant. "
-        r"Entries are fixed-effect coefficients with Wald SEs in parentheses. "
-        r"Stars mark p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$. "
-        r"ADHD is the main predictor; Sex, IQ, and Medication are covariates."
+    lines.append(r"\captionsetup{labelfont=bf}")
+    
+    caption_text = (
+        r"\textbf{Multiple linear regression results of parameters with ADHD and covariates.} "
+        r"Multiple linear regression models ($N=5,918$). Entries are fixed-effect coefficients with Wald SEs in parentheses. "
+        r"Stars denote p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$. "
+        r"ADHD was the main predictor, with Sex, IQ, and Medication included as covariates."
     )
+    
+    lines.append(rf"\caption{{{caption_text}}}")
+    lines.append(r"\label{tab:lm_pomdp}")
     lines.append(r"\end{table}")
     
     return "\n".join(lines)
@@ -216,19 +198,11 @@ def build_latex_table(summary_df):
 
 def main():
     try:
-        # 1. Load Data
         df = load_and_prep_data(PARAMS_CSV, STATS_CSV)
+        results_df = fit_linear_models(df, PARAMS_OF_INTEREST)
         
-        # 2. Fit MixedLM Models
-        results_df = fit_mixed_models(df, PARAMS_OF_INTEREST)
-        
-        # 3. Generate LaTeX
         if not results_df.empty:
             latex_code = build_latex_table(results_df)
-            
-            # print("\n--- LaTeX Table Output ---\n")
-            # print(latex_code)
-            
             with open(OUTPUT_TEX, "w") as f:
                 f.write(latex_code)
             print(f"\nSaved LaTeX table to: {OUTPUT_TEX}")
@@ -237,6 +211,8 @@ def main():
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

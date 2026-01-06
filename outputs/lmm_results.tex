@@ -1,7 +1,5 @@
 \begin{table}[H]
 \centering
-\caption{Linear mixed-effects results (ADHD main effect; random intercepts by participant; controlling sex, IQ, and medication)}
-\label{tab:lmm_pomdp_full}
 \begin{tabularx}{\linewidth}{lXXXXX}
 \toprule
 \textbf{Parameter} & \textbf{Intercept} & \textbf{ADHD} & \textbf{Sex (Male)} & \textbf{IQ} & \textbf{Medication} \\
@@ -17,5 +15,7 @@ $c_t$ & 6.40e-04\textbf{***} (3.74e-05) & -2.83e-06 (2.77e-06) & 1.40e-04\textbf
 \vspace{1mm}
 \raggedright
 \small
-\textbf{Note.} Linear mixed-effects models with random intercepts by participant. Entries are fixed-effect coefficients with Wald SEs in parentheses. Stars mark p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$. ADHD is the main predictor; Sex, IQ, and Medication are covariates.
+\captionsetup{labelfont=bf}
+\caption{\textbf{Multiple linear regression results of parameters with ADHD and covariates.} Multiple linear regression models ($N=5,918$). Entries are fixed-effect coefficients with Wald SEs in parentheses. Stars denote p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$. ADHD was the main predictor, with Sex, IQ, and Medication included as covariates.}
+\label{tab:lm_pomdp}
 \end{table}

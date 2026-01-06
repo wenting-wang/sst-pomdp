@@ -483,7 +483,7 @@ class POMDP:
 
     def simu_trial(self, true_go_state, true_stop_state, ssd, verbose=False):
         def generate_obs_sequences(true_go_state, true_stop_state, ssd):
-            if true_stop_state == 'stop':
+            if true_stop_state == 'stop': # stop trial
                 if ssd is None or np.isnan(ssd):
                     raise ValueError("SSD must be specified for stop trials.")
                 ssd = int(ssd)
@@ -500,7 +500,7 @@ class POMDP:
                 x_on_post = np.random.choice(
                     [0, 1, 2], horizon - ssd, p=p_x_z1)
                 x_seq = np.concatenate((x_pre, x_on_post))
-            else:
+            elif true_stop_state == 'nonstop': # go trial
                 if ssd is not None and not np.isnan(ssd):
                     raise ValueError("SSD must be None or NaN for go trials.")
 
