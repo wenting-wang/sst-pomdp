@@ -180,14 +180,12 @@ def generate_counts_table(
         lvl = str(row["ADHD Score"])
         vals = [str(int(row[s])) for s in score_cols] + [str(int(row["Total"]))]
         line = " & ".join([g, lvl] + vals) + r" \\"
-
-        # Add horizontal rules
-        if i == 1: lines.append(r"\midrule") # After Count row
-        elif g != "" and prev_group == "": lines.append(r"\midrule") # Between groups
-
+        if i == 1: lines.append(r"\midrule")
+        elif g != "" and prev_group == "": lines.append(r"\midrule")
         lines.append(line)
         prev_group = g
 
+    # Updated LaTeX string with the minipage note
     latex_str = (
         "\\begin{table}[ht]\n"
         "\\centering\n"
@@ -200,6 +198,12 @@ def generate_counts_table(
         "\\bottomrule\n"
         "\\end{tabular}\n"
         "}\n"
+        "\\vspace{4pt}\n"
+        "\\begin{minipage}{\\textwidth}\n"
+        "    \\footnotesize \\noindent Note: IQ groups defined by sample tertiles: "
+        "Low ($<17$), Mid ($17 \\le \\text{IQ} < 20$), and High ($\\ge 20$). "
+        "Medication indicates stimulant use at assessment.\n"
+        "\\end{minipage}\n"
         f"\\caption{{{caption}}}\n"
         f"\\label{{{label}}}\n"
         "\\end{table}\n"
@@ -211,7 +215,6 @@ def generate_counts_table(
         print(f"LaTeX table saved to: {outfile}")
 
     return combined
-
 
 # --- Main Execution ---
 
