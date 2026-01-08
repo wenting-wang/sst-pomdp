@@ -121,9 +121,8 @@ def fit_linear_models(df, params):
 
     return pd.DataFrame(rows)
 
-
 def build_latex_table(summary_df):
-    """Generates the LaTeX table string with the caption at the bottom."""
+    """Generates the LaTeX table string with correct minipage note and caption."""
     
     def p_to_stars(p):
         if pd.isna(p): return ""
@@ -135,24 +134,23 @@ def build_latex_table(summary_df):
     def fmt(beta, se, p, is_scientific=False):
         if pd.isna(beta) or pd.isna(se):
             return ""
-        
         if is_scientific:
             val_str = f"{beta:.2e}"
             se_str = f"{se:.2e}"
         else:
             val_str = f"{beta:.4f}"
             se_str = f"{se:.4f}"
-            
         stars = p_to_stars(p)
         return f"{val_str}{stars} ({se_str})"
 
-    # --- Table Construction ---
     lines = []
     lines.append(r"\begin{table}[H]")
     lines.append(r"\centering")
     
-    # Note: Caption removed from top, will be added at bottom
+    # Place Caption at the top
+    lines.append(r"\caption{Multiple linear regression results of parameters with ADHD and covariates.}")
     
+    # Define Column structure
     lines.append(r"\begin{tabularx}{\linewidth}{lXXXXX}")
     lines.append(r"\toprule")
     lines.append(r"\textbf{Parameter} & \textbf{Intercept} & \textbf{ADHD} & \textbf{Sex (Male)} & \textbf{IQ} & \textbf{Medication} \\")
@@ -160,7 +158,6 @@ def build_latex_table(summary_df):
 
     for _, r in summary_df.iterrows():
         is_sci = (r['param'] == 'cost_time')
-        
         row = (
             f"{r['param_label']} & "
             f"{fmt(r['Intercept'], r['Intercept_se'], r['Intercept_p'], is_sci)} & "
@@ -174,25 +171,21 @@ def build_latex_table(summary_df):
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabularx}")
     
-    # --- Modified End Section ---
+    # Note Section using Minipage
+    lines.append(r"")  # Blank line for spacing
     lines.append(r"\vspace{1mm}")
-    lines.append(r"\raggedright")
-    lines.append(r"\small")
-    lines.append(r"\captionsetup{labelfont=bf}")
+    lines.append(r"\begin{minipage}{\textwidth} % Force a container as wide as the page")
+    lines.append(r"    \footnotesize \noindent Note: Multiple linear regression models ($N=5,918$). "
+                 r"Entries are fixed-effect coefficients with Wald SEs in parentheses. "
+                 r"Stars denote p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$. "
+                 r"ADHD was the main predictor, with Sex, IQ, and Medication included as covariates.")
+    lines.append(r"\end{minipage}")
     
-    caption_text = (
-        r"\textbf{Multiple linear regression results of parameters with ADHD and covariates.} "
-        r"Multiple linear regression models ($N=5,918$). Entries are fixed-effect coefficients with Wald SEs in parentheses. "
-        r"Stars denote p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$. "
-        r"ADHD was the main predictor, with Sex, IQ, and Medication included as covariates."
-    )
-    
-    lines.append(rf"\caption{{{caption_text}}}")
+    # Label at the end
     lines.append(r"\label{tab:lm_pomdp}")
     lines.append(r"\end{table}")
     
     return "\n".join(lines)
-
 
 # --- Main Execution ---
 
