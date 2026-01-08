@@ -15,7 +15,7 @@ PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
 STATS_CSV = OUT_DIR / "stats_beh_full.csv"
 
 # Output
-OUTPUT_TEX = OUT_DIR / "lmm_results.tex"
+OUTPUT_TEX = OUT_DIR / "linear_model_parameters.tex"
 
 # Analysis Config
 PARAMS_OF_INTEREST = ['q_d_n', 'q_d', 'q_s_n', 'q_s', 'cost_stop_error', 'cost_time']
