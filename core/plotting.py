@@ -553,7 +553,10 @@ def plot_rate_timecourses(
     # ---------- simulate per rate ----------
     series = []
     for r in rates:
-        m = model.__class__(rate_stop_trial=float(r), **params)
+        current_params = params.copy()
+        current_params['rate_stop_trial'] = float(r)
+
+        m = model.__class__(**current_params)
         m.value_iteration_tensor()
 
         # A=success, B=error, M=miss (GM only)

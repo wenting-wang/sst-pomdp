@@ -458,7 +458,7 @@ class POMDP_Independent(POMDP):
 # The 5 Models for Ablation Study
 # =============================================================================
 
-# --- M4: The Full Model (Your Proposal) ---
+# --- M4: The Full Model (POMDP) ---
 # Structure: Dependent
 # Perception: Free (q_n fitted)
 # Policy: Softmax
@@ -481,8 +481,12 @@ class M3_Rigid_Dependent(POMDP):
         Forces q_d_n=0, q_s_n=0. Ignores inv_temp.
         """
         # Call parent with fixed null params and dummy inv_temp
-        super().__init__(q_d_n=0.0, q_d=q_d, 
-                         q_s_n=0.0, q_s=q_s,
+        kwargs.pop('q_d_n', None)
+        kwargs.pop('q_s_n', None)
+        kwargs.pop('inv_temp', None)
+
+        super().__init__(q_d_n=1e-5, q_d=q_d, 
+                         q_s_n=1e-5, q_s=q_s,
                          cost_go_error=cost_go_error, 
                          cost_go_missing=cost_go_missing,
                          cost_stop_error=cost_stop_error, 
@@ -515,7 +519,7 @@ class M3_Rigid_Dependent(POMDP):
 # Structure: Independent
 # Perception: Free (q_n fitted)
 # Policy: Softmax
-class M2_Flexible_Independent(POMDP_Independent):
+class M2_FullParam_Independent(POMDP_Independent):
     """
     Inherits Independent structure.
     Keeps Softmax and Free Parameters from base logic.
@@ -527,14 +531,16 @@ class M2_Flexible_Independent(POMDP_Independent):
 # Structure: Independent
 # Perception: Fixed (q_n = 0)
 # Policy: Softmax
-class M1_Noisy_Independent(POMDP_Independent):
+class M1_Softmax_Independent(POMDP_Independent):
     def __init__(self, q_d, q_s, cost_go_error, cost_go_missing,
                  cost_stop_error, cost_time, inv_temp, **kwargs):
         """
         Forces q_d_n=0, q_s_n=0. Keeps Softmax (inv_temp).
         """
-        super().__init__(q_d_n=0.0, q_d=q_d, 
-                         q_s_n=0.0, q_s=q_s,
+        kwargs.pop('q_d_n', None)
+        kwargs.pop('q_s_n', None)
+        super().__init__(q_d_n=1e-5, q_d=q_d, 
+                         q_s_n=1e-5, q_s=q_s,
                          cost_go_error=cost_go_error, 
                          cost_go_missing=cost_go_missing,
                          cost_stop_error=cost_stop_error, 
@@ -553,8 +559,13 @@ class M0_Baseline(POMDP_Independent):
         """
         Forces q_d_n=0, q_s_n=0. Ignores inv_temp.
         """
-        super().__init__(q_d_n=0.0, q_d=q_d, 
-                         q_s_n=0.0, q_s=q_s,
+        kwargs.pop('q_d_n', None)
+        kwargs.pop('q_s_n', None)
+        kwargs.pop('inv_temp', None)
+        kwargs.pop('rate_stop_trial', None)  # Use default from base class
+
+        super().__init__(q_d_n=1e-5, q_d=q_d, 
+                         q_s_n=1e-5, q_s=q_s,
                          cost_go_error=cost_go_error, 
                          cost_go_missing=cost_go_missing,
                          cost_stop_error=cost_stop_error, 
