@@ -6,7 +6,8 @@ from pathlib import Path
 current_dir = Path(__file__).resolve().parent
 sys.path.append(str(current_dir.parent))
 
-from model.pomdp import POMDP
+from core.models import POMDP
+from core import plotting
 
 # --- Configuration ---
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
@@ -52,6 +53,6 @@ if __name__ == "__main__":
     pomdp.value_iteration_tensor()
 
     print("Generating Plots...")
-    pomdp.plot_policy_simple(OUT_DIR / 'policy_selected.png', dpi=300, selected_timesteps=[0, 37, 38, 39])
-    pomdp.plot_policy(OUT_DIR / 'policy_full.png', dpi=300)
+    plotting.plot_policy_simple(pomdp, OUT_DIR / 'policy_selected.png', dpi=300, selected_timesteps=[0, 37, 38, 39])
+    plotting.plot_policy(pomdp, OUT_DIR / 'policy_full.png', dpi=300)
     print("Done.")

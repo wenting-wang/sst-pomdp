@@ -187,7 +187,7 @@ def simu_task(model):
         else:
             ssd = None
 
-        trial_outcome = model.simu_trial(
+        trial_outcome = simu_trial(model,
             true_go_state, true_stop_state, ssd)
         outcomes.append(trial_outcome)
 

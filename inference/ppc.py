@@ -7,8 +7,9 @@ from typing import Dict, List, Optional
 
 # Custom Modules (Ensure these are in the same folder)
 from utils.preprocessing import preprocessing
-from model.pomdp import POMDP
 from utils.metrics import get_distance
+from core.models import POMDP
+from core import simulation
 
 # --- Configuration ---
 
@@ -95,7 +96,7 @@ def simulate_task(params: Dict[str, float], config: SimConfig, seed: int) -> Opt
         # Initialize and Run Model
         agent = POMDP(**params, rate_stop_trial=config.rate_stop_trial)
         agent.value_iteration_tensor()
-        sim_data = agent.simu_task()
+        sim_data = simulation.simu_task(agent)
         
         # Convert to DataFrame
         # Columns must match what 'metrics.py' expects: 'result', 'rt', 'ssd'

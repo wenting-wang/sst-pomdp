@@ -17,7 +17,7 @@ if str(project_root) not in sys.path:
 
 # --- Custom Imports ---
 from utils.metrics import get_stats_mean_sim
-from model.pomdp import POMDP
+from core.models import POMDP
 
 # =============================================================================
 # CONFIGURATION

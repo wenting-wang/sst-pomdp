@@ -60,9 +60,10 @@ echo "Running in scratch: ${SCRATCH_DIRECTORY}"
 
 # 3. Copy source files to scratch
 cd "${SCRATCH_DIRECTORY}"
-cp "${SLURM_SUBMIT_DIR}/pomdp.py"                       .
-cp "${SLURM_SUBMIT_DIR}/preprocessing.py"               . || true
-cp "${SLURM_SUBMIT_DIR}/pipeline_transformer_snpe.py"   .
+cp "${SLURM_SUBMIT_DIR}/models.py"                       .
+cp "${SLURM_SUBMIT_DIR}/simulation.py"                   .
+cp "${SLURM_SUBMIT_DIR}/preprocessing.py"                . || true
+cp "${SLURM_SUBMIT_DIR}/tesbi.py"   .
 
 # Create output directory
 mkdir -p outputs
@@ -80,14 +81,14 @@ python -c "import sys,torch; print('Python', sys.version); print('Torch', torch.
 
 # --- Stage 1: Pretrain Encoder ---
 echo "[Stage 1] Pretraining Encoder..."
-srun --cpu-bind=cores python pipeline_transformer_snpe.py \
+srun --cpu-bind=cores python tesbi.py \
   --stage pretrain \
   --n1_pre ${N1_PRE} \
   --epochs ${EPOCHS}
 
 # --- Stage 2: Train SNPE ---
 echo "[Stage 2] Training SNPE (density=${DENSITY})..."
-srun --cpu-bind=cores python pipeline_transformer_snpe.py \
+srun --cpu-bind=cores python tesbi.py \
   --stage snpe \
   --n1_pre ${N1_PRE} \
   --n2 ${N2} \
@@ -95,7 +96,7 @@ srun --cpu-bind=cores python pipeline_transformer_snpe.py \
 
 # --- Stage 3: Recovery Check ---
 echo "[Stage 3] Running Recovery Sweep (K=${REC_K})..."
-srun --cpu-bind=cores python pipeline_transformer_snpe.py \
+srun --cpu-bind=cores python tesbi.py \
   --stage recover \
   --K ${REC_K} \
   --num_post ${REC_NUM_POST}
@@ -103,7 +104,7 @@ srun --cpu-bind=cores python pipeline_transformer_snpe.py \
 # --- Stage 4: Inference on Real Data ---
 if [[ -n "${SST_FOLDER}" && -d "${SST_FOLDER}" ]]; then
   echo "[Stage 4] Processing Real Data in: ${SST_FOLDER}"
-  srun --cpu-bind=cores python pipeline_transformer_snpe.py \
+  srun --cpu-bind=cores python tesbi.py \
     --stage posterior \
     --sst_folder "${SST_FOLDER}" \
     --glob_pat "${GLOB_PAT}" \

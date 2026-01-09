@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 current_dir = Path(__file__).resolve().parent
 sys.path.append(str(current_dir.parent)) 
 
@@ -10,7 +11,8 @@ import numpy as np
 import pandas as pd
 
 # Custom Modules
-from model.pomdp import POMDP
+from core.models import POMDP
+from core import simulation
 from utils.preprocessing import preprocessing
 
 # --- Configuration & Paths ---
@@ -111,7 +113,7 @@ def run_simulation(params, n_repeat=1):
 
     sim_dfs = []
     for _ in range(n_repeat):
-        out = pomdp.simu_task()
+        out = simulation.simu_task(pomdp)
         df = pd.DataFrame(out, columns=['result', 'rt', 'ssd'])
         sim_dfs.append(df)
         

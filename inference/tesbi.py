@@ -15,34 +15,39 @@ Workflow:
 ================================================================================
 USAGE EXAMPLES
 ================================================================================
+HPC (recommended for full runs):
+
+    Use run_tesbi.sh on an HPC cluster with SLURM to execute the full pipeline.
+
+================================================================================
+Local Testing (not recommended for full runs):
 
 --- A. SMOKE TEST (Fast Debugging) ---
 Use these commands to verify the pipeline works without waiting hours.
 
 # 1. Pretrain Encoder (Quick: 500 sims, 2 epochs)
-python pipeline_transformer_snpe.py --stage pretrain --n1_pre 500 --epochs 2
+python tesbi.py --stage pretrain --n1_pre 500 --epochs 2
 
 # 2. Train SNPE (Light: MAF density, small N)
-python pipeline_transformer_snpe.py --stage snpe --n1_pre 500 --n2 200 --density maf
+python tesbi.py --stage snpe --n1_pre 500 --n2 200 --density maf
 
 # 3. Recovery Check (5 test cases)
-python pipeline_transformer_snpe.py --stage recover --K 5 --num_post 500
-
+python tesbi.py --stage recover --K 5 --num_post 500
 
 --- B. REAL RUN (Production) ---
 Use these commands for final analysis. WARNING: Heavy computation.
 
 # 1. Pretrain Encoder (Deep: 30k sims, 8 epochs)
-python pipeline_transformer_snpe.py --stage pretrain --n1_pre 30000 --epochs 8
+python tesbi.py --stage pretrain --n1_pre 30000 --epochs 8
 
 # 2. Train SNPE (Heavy: NSF density, 50k total sims)
-python pipeline_transformer_snpe.py --stage snpe --n1_pre 30000 --n2 20000 --density nsf
+python tesbi.py --stage snpe --n1_pre 30000 --n2 20000 --density nsf
 
 # 3. Full Recovery Sweep (200 test cases)
-python pipeline_transformer_snpe.py --stage recover --K 200 --num_post 4000
+python tesbi.py --stage recover --K 200 --num_post 4000
 
 # 4. Inference on Real Data (All subjects)
-python pipeline_transformer_snpe.py --stage posterior \
+python tesbi.py --stage posterior \
   --sst_folder "/home/wwang/data/sst_valid_raw" \
   --glob_pat "NDAR_*.csv.zip" \
   --num_samples 10000
@@ -73,7 +78,8 @@ from sbi.utils import BoxUniform
 # Local modules
 try:
     from utils.preprocessing import preprocessing
-    from model.pomdp import POMDP
+    from core.models import POMDP
+    from core import simulation
 except ImportError:
     # Placeholder for linting/testing without local modules
     def preprocessing(fp): raise NotImplementedError("preprocessing module missing")
@@ -126,7 +132,7 @@ def simulate_data(params: Dict[str, float], rate_stop_trial=1/6, seed: Optional[
     
     pomdp = POMDP(**params, rate_stop_trial=rate_stop_trial)
     pomdp.value_iteration_tensor()
-    arr = pomdp.simu_task()
+    arr = simulation.simu_task(pomdp)
     return pd.DataFrame(arr, columns=["result", "rt", "ssd"])
 
 
