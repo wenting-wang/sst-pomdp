@@ -402,26 +402,9 @@ class POMDP:
                                      for action in [0, 1]])
             self.value_left[t_step] = action_costs[0]
             self.value_right[t_step] = action_costs[1]
-
             # ----------------------
-            # Select optimal action
+            # Determine optimal action and value
             # ----------------------
-            # all_action_values = np.stack([
-            #     self.value_left[t_step],
-            #     self.value_right[t_step],
-            #     self.value_wait[t_step]
-            # ])
-            # min_values = np.min(all_action_values, axis=0)
-            # best_action = np.argmin(all_action_values, axis=0)
-
-            # # Tie-breaking: prefer wait if left == right
-            # tie_counts = np.sum(all_action_values == min_values, axis=0)
-            # best_action[tie_counts > 1] = 2
-
-            # self.value[t_step] = min_values
-            # self.policy[t_step] = best_action
-
-            ##############################
             all_action_values = np.stack(
                 [self.value_left[t_step], self.value_right[t_step], self.value_wait[t_step]])
 
@@ -442,3 +425,154 @@ class POMDP:
 
             self.value[t_step] = minv
             self.policy[t_step] = best
+
+
+
+# =============================================================================
+# Helper Class: Structural Independence
+# =============================================================================
+
+class POMDP_Independent(POMDP):
+    """
+    [Structural Helper]
+    Inherits from the Base POMDP but removes the Dependency.
+    In this class, Stop Signal does NOT mask Go Signal.
+    """
+    def _setup_observation_distributions(self):
+        """Override: Enforce Independence (reverse=False even for z=1)."""
+        # Go Signal: z=0 (Normal)
+        self.p_x_dL_z0, self.p_x_dR_z0 = self._generate_observation_probs(
+            self.q_d, self.q_d_n, reverse=False)
+        
+        # Go Signal: z=1 (Stop) -> REMAINS NORMAL (Independent)
+        self.p_x_dL_z1, self.p_x_dR_z1 = self._generate_observation_probs(
+            self.q_d, self.q_d_n, reverse=False) 
+
+        # Stop Signal (Standard)
+        self.p_y_z0_pre, self.p_y_z1_pre = self._generate_observation_probs(self.q_s, self.q_s_n)
+        self.p_y_z0_on, self.p_y_z1_on   = self._generate_observation_probs(self.q_s, self.q_s_n)
+        self.p_y_z0_post, self.p_y_z1_post = self._generate_observation_probs(self.q_s, self.q_s_n, reverse=True)
+
+
+# =============================================================================
+# The 5 Models for Ablation Study
+# =============================================================================
+
+# --- M4: The Full Model (Your Proposal) ---
+# Structure: Dependent
+# Perception: Free (q_n fitted)
+# Policy: Softmax
+class M4_Full(POMDP):
+    """
+    Alias for the original POMDP class. 
+    This is the proposed model with all features enabled.
+    """
+    pass
+
+
+# --- M3: Rigid Dependent (Structure Only) ---
+# Structure: Dependent (Masking works)
+# Perception: Fixed (q_n = 0)
+# Policy: Deterministic (Argmax)
+class M3_Rigid_Dependent(POMDP):
+    def __init__(self, q_d, q_s, cost_go_error, cost_go_missing,
+                 cost_stop_error, cost_time, **kwargs):
+        """
+        Forces q_d_n=0, q_s_n=0. Ignores inv_temp.
+        """
+        # Call parent with fixed null params and dummy inv_temp
+        super().__init__(q_d_n=0.0, q_d=q_d, 
+                         q_s_n=0.0, q_s=q_s,
+                         cost_go_error=cost_go_error, 
+                         cost_go_missing=cost_go_missing,
+                         cost_stop_error=cost_stop_error, 
+                         cost_time=cost_time, 
+                         inv_temp=1.0, # Dummy, won't be used due to override below
+                         **kwargs)
+
+    def get_action_and_qvals(self, beta, sigma, t_step):
+        """Override: Deterministic Policy (Argmax), ignoring inv_temp."""
+        # Calculate Q-values same as parent
+        b_idx = int(round(beta * self.bins))
+        s_idx = int(round(sigma * self.bins))
+        
+        q_wait = self.value_wait[t_step, b_idx, s_idx]
+        q_left = self.value_left[t_step, b_idx, s_idx]
+        q_right = self.value_right[t_step, b_idx, s_idx]
+        q_vals = np.array([q_left, q_right, q_wait])
+
+        # Deterministic Choice
+        action = np.argmax(q_vals)
+        
+        # Mock probabilities (1.0 for chosen, 0.0 for others) for API consistency
+        probs = np.zeros(3)
+        probs[action] = 1.0
+        
+        return action, q_vals, probs
+
+
+# --- M2: Flexible Independent (The Strong Competitor) ---
+# Structure: Independent
+# Perception: Free (q_n fitted)
+# Policy: Softmax
+class M2_Flexible_Independent(POMDP_Independent):
+    """
+    Inherits Independent structure.
+    Keeps Softmax and Free Parameters from base logic.
+    """
+    pass
+
+
+# --- M1: Noisy Independent ---
+# Structure: Independent
+# Perception: Fixed (q_n = 0)
+# Policy: Softmax
+class M1_Noisy_Independent(POMDP_Independent):
+    def __init__(self, q_d, q_s, cost_go_error, cost_go_missing,
+                 cost_stop_error, cost_time, inv_temp, **kwargs):
+        """
+        Forces q_d_n=0, q_s_n=0. Keeps Softmax (inv_temp).
+        """
+        super().__init__(q_d_n=0.0, q_d=q_d, 
+                         q_s_n=0.0, q_s=q_s,
+                         cost_go_error=cost_go_error, 
+                         cost_go_missing=cost_go_missing,
+                         cost_stop_error=cost_stop_error, 
+                         cost_time=cost_time, 
+                         inv_temp=inv_temp, 
+                         **kwargs)
+
+
+# --- M0: The Baseline (Yu et al. 2011 style) ---
+# Structure: Independent
+# Perception: Fixed (q_n = 0)
+# Policy: Deterministic
+class M0_Baseline(POMDP_Independent):
+    def __init__(self, q_d, q_s, cost_go_error, cost_go_missing,
+                 cost_stop_error, cost_time, **kwargs):
+        """
+        Forces q_d_n=0, q_s_n=0. Ignores inv_temp.
+        """
+        super().__init__(q_d_n=0.0, q_d=q_d, 
+                         q_s_n=0.0, q_s=q_s,
+                         cost_go_error=cost_go_error, 
+                         cost_go_missing=cost_go_missing,
+                         cost_stop_error=cost_stop_error, 
+                         cost_time=cost_time, 
+                         inv_temp=1.0, # Dummy
+                         **kwargs)
+
+    def get_action_and_qvals(self, beta, sigma, t_step):
+        """Override: Deterministic Policy (Argmax)."""
+        # (Same logic as M3, but applied to Independent structure)
+        b_idx = int(round(beta * self.bins))
+        s_idx = int(round(sigma * self.bins))
+        q_vals = np.array([
+            self.value_left[t_step, b_idx, s_idx],
+            self.value_right[t_step, b_idx, s_idx],
+            self.value_wait[t_step, b_idx, s_idx]
+        ])
+        action = np.argmax(q_vals)
+        probs = np.zeros(3)
+        probs[action] = 1.0
+        return action, q_vals, probs
