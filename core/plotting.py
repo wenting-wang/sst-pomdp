@@ -1,5 +1,4 @@
 
-
 from matplotlib import pyplot as plt
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.lines import Line2D
@@ -7,7 +6,6 @@ import numpy as np
 import pandas as pd
 
 from core import simulation
-from core.simulation import simu_trial
 
 
 def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, saveto=None):
@@ -336,7 +334,7 @@ def plot_policy(model, saveto, dpi=150):
     # fig.suptitle("Optimal Policy Over Time", fontsize=16, y=1.03)
 
     plt.savefig(saveto, dpi=dpi, bbox_inches="tight")
-    # plt.show()
+    plt.show()
 
 def plot_policy_simple(model, saveto, dpi=150, selected_timesteps=None):
     """
@@ -418,8 +416,7 @@ def plot_policy_simple(model, saveto, dpi=150, selected_timesteps=None):
     cbar.ax.set_title("Action", fontsize=14, pad=10,
                         rotation=0, loc='left')
     plt.savefig(saveto, dpi=dpi, bbox_inches="tight")
-    # plt.show()
-
+    plt.show()
 
 ###################### Viz Across-trial ######################
 
@@ -437,7 +434,7 @@ def _simulate_mixed_session(model, n_trials=2000, ssd=12):
         out.append(r)
     return pd.DataFrame(out, columns=["result", "rt", "ssd"])
 
-def _summarize_behavior_with_sem(model, df, step_in_ms=25.0):
+def _summarize_behavior_with_sem(df, step_in_ms=25.0):
     import numpy as np
     is_go = df["result"].isin(["GS", "GE", "GM"])
     go_df = df.loc[is_go]
@@ -470,7 +467,6 @@ def _summarize_behavior_with_sem(model, df, step_in_ms=25.0):
         rt_go_succ=rt_go_succ, rt_go_succ_sem=rt_go_succ_sem,
         rt_stop_err=rt_stop_err, rt_stop_err_sem=rt_stop_err_sem
     )
-
 
 def plot_rate_timecourses(
     model,
@@ -569,7 +565,7 @@ def plot_rate_timecourses(
 
             if trial_type == "stop":
                 ssd_use = 10 if ssd is None else int(ssd)
-                res = simu_trial(m, true_go, "stop", ssd_use, verbose=True)
+                res = simulation.simu_trial(m, true_go, "stop", ssd_use, verbose=True)
                 outcome = res["result"] if isinstance(res, dict) else (
                     res[0] if isinstance(res, (list, tuple)) else None)
                 if outcome == "SS":
@@ -578,7 +574,7 @@ def plot_rate_timecourses(
                     rec_b.append(res)
                 # no "SM" in stop trials; keep two buckets
             else:
-                res = simu_trial(m, true_go, "nonstop", None, verbose=True)
+                res = simulation.simu_trial(m, true_go, "nonstop", None, verbose=True)
                 outcome = res["result"] if isinstance(res, dict) else (
                     res[0] if isinstance(res, (list, tuple)) else None)
                 if outcome == "GS":
@@ -759,13 +755,17 @@ def plot_rate_timecourses(
         r"$Q^\nu_t(W) - \min(Q^\nu_t(L), Q^\nu_t(R))$", fontsize=12)
 
     plt.tight_layout()
-    fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.03)
-    plt.close(fig)
+    if saveto:
+        fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.03)
+        plt.show()
+        plt.close(fig)
+    else:
+        plt.show()
 
 def plot_rate_behavior(
     model,
     params: dict,
-    rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+    rates=(0.05, 0.10, 1/6, 0.30, 0.50),
     ssd=10,
     n_session_trials=1000,
     step_in_ms=25.0,
@@ -786,7 +786,7 @@ def plot_rate_behavior(
         m = model.__class__(rate_stop_trial=float(r), **params)
         m.value_iteration_tensor()
         df = _simulate_mixed_session(m, n_trials=n_session_trials, ssd=ssd)
-        stats = _summarize_behavior_with_sem(model, df, step_in_ms=step_in_ms)
+        stats = _summarize_behavior_with_sem(df, step_in_ms=step_in_ms)
         rows.append(dict(rate=float(r), **stats))
     beh = pd.DataFrame(rows).sort_values("rate")
 
@@ -851,6 +851,7 @@ def plot_rate_behavior(
     if saveto is not None:
         fig.canvas.draw()
         fig.savefig(saveto, dpi=300, bbox_inches="tight", pad_inches=0.02)
+        plt.show()
         plt.close(fig)
     else:
         plt.show()
