@@ -10,7 +10,7 @@ class POMDP:
     """
 
     def __init__(self, q_d_n, q_d, q_s_n, q_s, cost_go_error, cost_go_missing,
-                 cost_stop_error, cost_time, inv_temp, ndt, rate_stop_trial=1/6):
+                 cost_stop_error, cost_time, inv_temp, ndt, rate_stop_trial):
         """
         Initialize model with perceptual noise and cost parameters.
 

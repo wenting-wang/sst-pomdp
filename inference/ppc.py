@@ -19,7 +19,7 @@ from core import simulation
 BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
-RAW_DATA_DIR = BASE_DIR / "sst_valid_raw"
+RAW_DATA_DIR = BASE_DIR / "sst_valid_base"
 VALID_FILES_LIST = BASE_DIR / "sst_valid_filenames.txt"
 POSTERIOR_SUMMARY_CSV = OUT_DIR / "posterior_summary.csv"
 OUTPUT_PPC_CSV = OUT_DIR / "ppc_metrics.csv"
@@ -29,7 +29,7 @@ OUTPUT_PPC_CSV = OUT_DIR / "ppc_metrics.csv"
 # OPTION 2: HPC Configuration (Uncomment to use)
 # ==========================================
 # # Base paths
-# RAW_DATA_DIR = Path("/home/wwang/data/sst_valid_raw")
+# RAW_DATA_DIR = Path("/home/wwang/data/sst_valid_base")
 # WORK_DIR = Path("/home/wwang/823879") # Or your specific output folder
 
 # # Input Files
@@ -48,7 +48,9 @@ FIXED_PARAMS = {
     "cost_go_missing": 1.0, 
     "inv_temp": 50.0,
 }
-PARAM_ORDER = ["q_d_n", "q_d", "q_s_n", "q_s", "cost_stop_error", "cost_time"]
+LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s"]
+LOG_PARAMS = ["cost_stop_error", "cost_time", "ndt"]
+PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
 
 
 @dataclass

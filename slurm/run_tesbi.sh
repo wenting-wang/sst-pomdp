@@ -17,22 +17,22 @@ set -eo pipefail
 # ==========================================
 
 # --- OPTION A: SMOKE TEST (Fast, for debugging) ---
-# N1_PRE=500
-# EPOCHS=2
-# N2=200
-# DENSITY=maf            # MAF is faster/more stable for very small samples
-# REC_K=5
-# REC_NUM_POST=500
-# NUM_SAMPLES_INF=3      # Small number of posterior samples per subject
+N1_PRE=100
+EPOCHS=2
+N2=100
+DENSITY=maf            # MAF is faster/more stable for very small samples
+REC_K=5
+REC_NUM_POST=100
+NUM_SAMPLES_INF=3      # Small number of posterior samples per subject
 
 # --- OPTION B: REAL RUN (Production) ---
-N1_PRE=30000
-EPOCHS=8
-N2=20000
-DENSITY=nsf              # NSF is generally more expressive for complex posteriors
-REC_K=200
-REC_NUM_POST=4000
-NUM_SAMPLES_INF=14988    # High number of posterior samples
+# N1_PRE=30000
+# EPOCHS=8
+# N2=20000
+# DENSITY=nsf              # NSF is generally more expressive for complex posteriors
+# REC_K=200
+# REC_NUM_POST=4000
+# NUM_SAMPLES_INF=14988    # High number of posterior samples
 
 # --- DATA PATHS ---
 # Set folder to process real data (leave empty "" to skip Stage 4)

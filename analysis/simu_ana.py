@@ -92,7 +92,12 @@ def main():
 
     # 2. Initialize POMDP
     print("\nInitializing POMDP Model...")
-    pomdp = POMDP(**params, rate_stop_trial=rate_stop)
+    # pomdp = POMDP(**params, rate_stop_trial=rate_stop)
+
+    # Test
+    pomdp = POMDP(**params, ndt=10, rate_stop_trial=rate_stop)
+
+
     pomdp.value_iteration_tensor() 
 
     # 4. Run Simulations
@@ -127,33 +132,33 @@ def main():
         out_go, out_stop, saveto=OUT_DIR / 'action_value.png'
     )
 
-    plotting.plot_rate_timecourses(
-                                model=pomdp,
-                                params=params,
-                                rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-                                ssd=10,
-                                n_batch=1000, 
-                                trial_type="stop",
-                                saveto=OUT_DIR / "rate_timecourses_stop.png")
+    # plotting.plot_rate_timecourses(
+    #                             model=pomdp,
+    #                             params=params,
+    #                             rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+    #                             ssd=10,
+    #                             n_batch=1000, 
+    #                             trial_type="stop",
+    #                             saveto=OUT_DIR / "rate_timecourses_stop.png")
 
-    # NONSTOP trials (go-only), SSD ignored
-    plotting.plot_rate_timecourses(
-                                model=pomdp,
-                                params=params,
-                                rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-                                ssd=None,
-                                n_batch=1000,
-                                trial_type="nonstop",
-                                saveto=OUT_DIR /"rate_timecourses_go.png")
+    # # NONSTOP trials (go-only), SSD ignored
+    # plotting.plot_rate_timecourses(
+    #                             model=pomdp,
+    #                             params=params,
+    #                             rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+    #                             ssd=None,
+    #                             n_batch=1000,
+    #                             trial_type="nonstop",
+    #                             saveto=OUT_DIR /"rate_timecourses_go.png")
 
-    plotting.plot_rate_behavior(
-        model=pomdp,
-        params=params,
-        rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-        ssd=10,
-        n_session_trials=1000,
-        saveto=OUT_DIR / "rate_behavior.png"
-    )
+    # plotting.plot_rate_behavior(
+    #     model=pomdp,
+    #     params=params,
+    #     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+    #     ssd=10,
+    #     n_session_trials=1000,
+    #     saveto=OUT_DIR / "rate_behavior.png"
+    # )
 
     print("Done.")
 

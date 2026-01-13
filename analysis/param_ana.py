@@ -9,41 +9,35 @@ import matplotlib.pyplot as plt
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
-
-# Inputs
 PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
 STATS_CSV = OUT_DIR / "stats_beh_full.csv"
+OUTPUT_PLOT = OUT_DIR / "parameters_v2.png"
 
-# Output
-OUTPUT_PLOT = OUT_DIR / "parameters.png"
-
-# Analysis Config
-ALL_PARAMS = [
-    'cost_go_error', 'cost_go_missing', 'cost_stop_error', 'cost_time',
-    'inv_temp', 'q_d', 'q_d_n', 'q_s', 'q_s_n'
-]
-
+# Updated params to match your requested layout: 
+# Row 1: chi', chi, c_se
+# Row 2: delta', delta, c_t
 PLOT_PARAMS = [
-    'q_d_n', 'q_d', 'q_s_n', 'q_s', 
-    'cost_stop_error', 'cost_time'
+    'q_d_n', 'q_s_n', 'cost_stop_error',
+    'q_d', 'q_s', 'cost_time'
 ]
 
 PARAM_DISPLAY_NAMES = {
-    'q_d_n': r"$\chi'$",
-    'q_d': r"$\chi$",
-    'q_s_n': r"$\sigma'$",
-    'q_s': r"$\sigma$",
-    'cost_stop_error': r"$c_{\mathrm{se}}$",
-    'cost_time': r"$c_t$",
+    'q_d_n': r"$\chi'$ (Go Null)",
+    'q_d': r"$\chi$ (Go Precision)",
+    'q_s_n': r"$\delta'$ (Stop Null)",
+    'q_s': r"$\delta$ (Stop Precision)",
+    'cost_stop_error': r"$c_{\mathrm{se}}$ (Stop Error Cost)",
+    'cost_time': r"$c_t$ (Time Cost)",
 }
-
-# Visualization Settings
-FILL_COLOR = "#413D7B"
 EDGE_COLOR = "#ffffff"
-BINS = 30
 
+FILL_COLOR = "#534F57"
+COLOR_MEAN = "#B03A2E"   # Deep Carmine (Red)
+COLOR_MEDIAN = "#21618C" # Steel Blue (Blue)
+COLOR_MODE = "#B7950B"   # Dark Ochre (Gold)
+
+BINS = 30
 
 # --- Core Functions ---
 
@@ -109,64 +103,53 @@ def print_summary_stats(df, params):
 
 
 def plot_parameter_distributions(df, params, output_path):
-    """Generates and saves a grid of Histograms + KDE plots."""
-    n = len(params)
-    ncols = 3
-    nrows = (n + ncols - 1) // ncols
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(10, 2.5 * nrows))
+    """Generates a 2x3 grid with stats (Mean, Median, Mode) and fixed axes."""
+    nrows, ncols = 2, 3
+    fig, axes = plt.subplots(nrows, ncols, figsize=(12, 3 * nrows))
     axes = axes.flatten()
 
     for i, param in enumerate(params):
         ax = axes[i]
-        
         if param not in df.columns:
-            ax.set_visible(False)
+            ax.axis('off')
             continue
             
         data = df[param].dropna()
         
-        # 1. Histogram
-        ax.hist(
-            data, bins=BINS,
-            color=FILL_COLOR, edgecolor=EDGE_COLOR,
-            alpha=0.7, linewidth=0.8, density=True
-        )
-        
-        # 2. KDE Line
-        sns.kdeplot(
-            data, ax=ax,
-            color=FILL_COLOR, linewidth=1.2,
-            fill=False, alpha=1
-        )
+        # Calculate stats
+        mean_val = data.mean()
+        median_val = data.median()
+        mode_val = data.round(3).mode()[0]  # Round to 3 to find a meaningful peak
 
-        # 3. Styling
-        label = PARAM_DISPLAY_NAMES.get(param, param)
-        ax.set_xlabel('')
-        ax.set_title(label, fontsize=14)
-        
-        if i % ncols == 0:
-            ax.set_ylabel("Posterior mean density", fontsize=12)
-        else:
-            ax.set_ylabel("")
+        # 1. Histogram + KDE
+        sns.histplot(data, bins=BINS, color=FILL_COLOR, edgecolor=EDGE_COLOR, 
+                     alpha=0.4, stat="density", ax=ax)
+        # sns.kdeplot(data, color=FILL_COLOR, linewidth=1, ax=ax)
 
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.tick_params(axis='both', direction='out', length=4, width=1, top=False, right=False)
-        
-        # Special formatting for cost_time (ticks starting from 0)
+        # 2. Add Vertical Lines for Stats
+        ax.axvline(mean_val, color=COLOR_MEAN, linestyle='--', label=f'Mean: {mean_val:.3f}')
+        ax.axvline(median_val, color=COLOR_MEDIAN, linestyle='-', label=f'Median: {median_val:.3f}')
+        ax.axvline(mode_val, color=COLOR_MODE, linestyle='-.', label=f'Mode: {mode_val:.3f}')
+
+        # 3. Specific Axis Constraints
+        # Set 0-1 range for the chi and delta parameters
+        if param in ['q_d_n', 'q_d', 'q_s_n', 'q_s']:
+            ax.set_xlim(0, 1)
         if param == 'cost_time':
-            ax.set_xticks(ax.get_xticks()[::2])
-            ax.set_xlim(left=0)
+            ax.set_xlim(0, 0.003)
+        
 
-    # Turn off empty subplots
-    for j in range(i + 1, len(axes)):
-        axes[j].axis("off")
+        # 4. Styling
+        ax.set_title(PARAM_DISPLAY_NAMES.get(param, param), fontsize=14, fontweight='regular')
+        ax.set_xlabel('')
+        ax.set_ylabel("Density" if i % ncols == 0 else "")
+        ax.legend(fontsize=10, frameon=False)
+        
+        sns.despine()
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
-    print(f"\nPlot saved to: {output_path}")
-
+    print(f"Plot saved to: {output_path}")
 
 # --- Main Execution ---
 
@@ -176,7 +159,7 @@ def main():
         df = load_and_merge_data(PARAMS_CSV, STATS_CSV)
         
         # 2. Text Summary (All Params)
-        print_summary_stats(df, ALL_PARAMS)
+        print_summary_stats(df, PLOT_PARAMS)
         
         # 3. Plotting (Selected Params)
         plot_parameter_distributions(df, PLOT_PARAMS, OUTPUT_PLOT)
@@ -186,3 +169,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# $\chi' = 0.548 / 0.565 / 0.611$,
+# $\chi = 0.728 / 0.722 / 0.683$,
+# $\delta' = 0.059 / 0.058 / 0.062$,
+# $\delta = 0.855 / 0.866 / 0.901$,
+# $c_{\mathrm{se}} = 1.316 / 1.366 / 1.825$,
+# $c_t = 8\times10^{-4} / 6\times10^{-4} / 1.7\times10^{-4}$.

@@ -54,6 +54,13 @@ python tesbi.py --stage posterior \
 
 ================================================================================
 """
+import sys
+import pandas as pd
+from pathlib import Path
+
+# Fix path to allow importing 'model'
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent))
 
 import os
 import math
@@ -76,15 +83,9 @@ from sbi.inference import SNPE
 from sbi.utils import BoxUniform
 
 # Local modules
-try:
-    from utils.preprocessing import preprocessing
-    from core.models import POMDP
-    from core import simulation
-except ImportError:
-    # Placeholder for linting/testing without local modules
-    def preprocessing(fp): raise NotImplementedError("preprocessing module missing")
-    class POMDP: pass 
-
+from utils.preprocessing import preprocessing
+from core.models import POMDP
+from core import simulation
 
 # --- Configuration ---
 
@@ -96,16 +97,18 @@ PARAM_RANGES = {
     "q_s":   (0.5, 1.0),
     "cost_stop_error": (3e-5, 2.0),
     "cost_time":       (3e-5, 0.003),
+    "ndt":            (3e-5, 30.0),
 }
 
 LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s"]
-LOG_PARAMS = ["cost_stop_error", "cost_time"]
+LOG_PARAMS = ["cost_stop_error", "cost_time", "ndt"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
 
 FIXED_PARAMS = {
     "cost_go_error":   1.0,
     "cost_go_missing": 1.0,
     "inv_temp":        50.0,
+    "rate_stop_trial": 1.0 / 6.0,
 }
 
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
@@ -123,14 +126,14 @@ POST_SUMMARY_CSV = ART_DIR / "posterior_summary_all.csv"
 
 # --- 1. Simulator Wrapper ---
 
-def simulate_data(params: Dict[str, float], rate_stop_trial=1/6, seed: Optional[int] = None) -> pd.DataFrame:
+def simulate_data(params: Dict[str, float], seed: Optional[int] = None) -> pd.DataFrame:
     """Runs the POMDP simulator for a single parameter set."""
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
     
-    pomdp = POMDP(**params, rate_stop_trial=rate_stop_trial)
+    pomdp = POMDP(**params)
     pomdp.value_iteration_tensor()
     arr = simulation.simu_task(pomdp)
     return pd.DataFrame(arr, columns=["result", "rt", "ssd"])
@@ -381,10 +384,14 @@ def run_snpe(args, prior, encoder):
     # Round 2 (Optional)
     if args.n2 > 0:
         print(f"[Round2] Active Learning with {args.n2} simulations...")
+
+        ref_x = torch.tensor(embeds_1_z.mean(axis=0, keepdims=True), dtype=torch.float32)
         # Mixture Proposal
         def proposal_sampler(shape):
             n = shape[0]; n_prior = int(args.mix_prior_frac * n); n_post = n - n_prior
-            return torch.cat([prior.sample((n_prior,)), posterior_1.sample((n_post,))], dim=0)
+            
+            post_samples = posterior_1.sample((n_post,), x=ref_x).reshape(n_post, -1)
+            return torch.cat([prior.sample((n_prior,)), post_samples], dim=0)
 
         block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000)
         embeds_2_z = stdzr.transform(block2.embeds)
