@@ -12,7 +12,7 @@ set -eo pipefail
 # ==========================================
 # CONFIGURATION
 # ==========================================
-SST_FOLDER="/home/wwang/data/sst_valid_raw"     # Data source (Needs to match CLEAN_DATA_DIR in filter.py)
+SST_FOLDER="/home/wwang/data/sst_valid_base"     # Data source (Needs to match CLEAN_DATA_DIR in filter.py)
 CSV_FILE="stats_beh_full.csv"                   # Subject list (In submit dir)
 OUTPUT_FILE="embeddings.csv"                    # Output filename
 OUTPUT_DIR="${SLURM_SUBMIT_DIR}"                # Final destination for results

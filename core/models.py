@@ -10,7 +10,7 @@ class POMDP:
     """
 
     def __init__(self, q_d_n, q_d, q_s_n, q_s, cost_go_error, cost_go_missing,
-                 cost_stop_error, cost_time, inv_temp, rate_stop_trial=1/6):
+                 cost_stop_error, cost_time, inv_temp, ndt, rate_stop_trial=1/6):
         """
         Initialize model with perceptual noise and cost parameters.
 
@@ -27,6 +27,8 @@ class POMDP:
         """
         # Hazard function parameter
         self.lamb = 0.2
+        # non-decision time (NDT) in time steps
+        self.ndt = ndt
         # r=p(stop trial), from across-trial model
         self.rate_stop_trial = rate_stop_trial
 

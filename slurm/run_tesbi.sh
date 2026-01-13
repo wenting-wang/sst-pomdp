@@ -36,7 +36,7 @@ NUM_SAMPLES_INF=14988    # High number of posterior samples
 
 # --- DATA PATHS ---
 # Set folder to process real data (leave empty "" to skip Stage 4)
-SST_FOLDER="/home/wwang/data/all_valid"
+SST_FOLDER="/home/wwang/data/sst_valid_base"
 GLOB_PAT="NDAR_*.csv.zip"
 
 # --- ENVIRONMENT ---
