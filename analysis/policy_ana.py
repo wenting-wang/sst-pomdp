@@ -12,12 +12,13 @@ from core import plotting
 # --- Configuration ---
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
-SUBJECT_ID = 'INV7C262RWK'
+SUBJECT_ID = 'INVJTCXNL4V'
 
 FIXED_PARAMS = {
-    'cost_go_error': 1.0, 
-    'cost_go_missing': 1.0, 
+    'cost_go_error': 1.0,
+    'cost_go_missing': 1.0,
     'inv_temp': 50.0,
+    'ndt': 0,
     'rate_stop_trial': 1/6
 }
 
@@ -44,12 +45,13 @@ def get_subject_params(subject_id, path):
 if __name__ == "__main__":
     print(f"Loading params for {SUBJECT_ID}...")
     params = get_subject_params(SUBJECT_ID, PARAMS_CSV)
-    
-    # Separate rate_stop_trial (passed as named arg)
-    rate_stop = params.pop('rate_stop_trial')
 
+    print("Parameters loaded:")
+    for k, v in params.items():
+        print(f"  {k}: {v}")
+    
     print("Running Value Iteration...")
-    pomdp = POMDP(**params, rate_stop_trial=rate_stop)
+    pomdp = POMDP(**params)
     pomdp.value_iteration_tensor()
 
     print("Generating Plots...")

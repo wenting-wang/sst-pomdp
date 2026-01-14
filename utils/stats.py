@@ -16,7 +16,7 @@ from utils.metrics import get_stats_mean
 BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 FILE_LIST_PATH = BASE_DIR / 'sst_valid_filenames.txt'
-DATA_DIR = BASE_DIR / 'sst_valid_raw'
+DATA_DIR = BASE_DIR / 'sst_valid_base'
 
 # Input Data Files
 CBCL_FILE = BASE_DIR / 'mh_p_cbcl.csv'

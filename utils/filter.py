@@ -10,7 +10,7 @@ INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"
 RAW_SOURCE_DIR = BASE_DIR / "abcd_sst_tlb01"
 
 # Output (Data)
-CLEAN_DATA_DIR = BASE_DIR / "sst_valid_raw"
+CLEAN_DATA_DIR = BASE_DIR / "sst_valid_base"
 
 # Output (Log)
 FOUND_FILES_TXT = BASE_DIR / "sst_valid_filenames.txt"

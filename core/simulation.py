@@ -39,6 +39,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
         v_right = model.value_right[idx]
         v_wait = model.value_wait[idx]
 
+        # softmax action selection
         q_vals = np.array([v_left, v_right, v_wait])
         q_vals = -q_vals  # cost
         q_vals -= np.max(q_vals)

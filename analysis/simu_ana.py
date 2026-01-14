@@ -20,13 +20,14 @@ OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 PARAMS_CSV = OUT_DIR / "posterior_summary.csv" 
 
 # Simulation Settings
-SUBJECT_ID = 'INV7C262RWK'
+SUBJECT_ID = 'INVJTCXNL4V'
 
 # Fixed parameters (Constants that do not vary by subject)
 FIXED_PARAMS = {
     'cost_go_error': 1.0,
     'cost_go_missing': 1.0,
     'inv_temp': 50.0,
+    'ndt': 0,
     'rate_stop_trial': 1/6
 }
 
@@ -80,8 +81,6 @@ def main():
     # 1. Load Parameters
     try:
         params = get_subject_params(SUBJECT_ID, PARAMS_CSV, FIXED_PARAMS)
-        rate_stop = params.pop('rate_stop_trial') 
-        
         print("Parameters loaded successfully:")
         for k, v in params.items():
             print(f"  {k}: {v}")
@@ -92,12 +91,7 @@ def main():
 
     # 2. Initialize POMDP
     print("\nInitializing POMDP Model...")
-    # pomdp = POMDP(**params, rate_stop_trial=rate_stop)
-
-    # Test
-    pomdp = POMDP(**params, ndt=10, rate_stop_trial=rate_stop)
-
-
+    pomdp = POMDP(**params)
     pomdp.value_iteration_tensor() 
 
     # 4. Run Simulations
@@ -125,11 +119,11 @@ def main():
     # 5. Plotting
     print("Generating Plots...")
     plotting.plot_simu_trial_batch_belief_5conditions(
-        out_go, out_stop, saveto=OUT_DIR / 'belief.png'
+        out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'belief.png'
     )
     
     plotting.plot_simu_trial_batch_action_value_5conditions(
-        out_go, out_stop, saveto=OUT_DIR / 'action_value.png'
+        out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.png'
     )
 
     # plotting.plot_rate_timecourses(

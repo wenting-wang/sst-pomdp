@@ -28,8 +28,8 @@ PARAMS = [
 PARAM_DISPLAY_NAMES = {
     'q_d_n': r"$\chi'$",
     'q_d': r"$\chi$",
-    'q_s_n': r"$\sigma'$",
-    'q_s': r"$\sigma$",
+    'q_s_n': r"$\delta'$",
+    'q_s': r"$\delta$",
     'cost_stop_error': r"$c_{\mathrm{se}}$",
     'cost_time': r"$c_t$",
 }

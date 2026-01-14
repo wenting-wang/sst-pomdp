@@ -21,7 +21,7 @@ BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
-RAW_DATA_DIR = BASE_DIR / "sst_valid_raw"
+RAW_DATA_DIR = BASE_DIR / "sst_valid_base"
 FILTER_CSV = OUT_DIR / "stats_beh_full.csv"
 PPC_METRICS_CSV = OUT_DIR / "ppc_metrics.csv"  # Output from ppc.py
 PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
@@ -75,9 +75,9 @@ def select_representative_subjects(ppc_file, filter_file):
     n = len(df_sorted)
     
     selection = [
-        (int(n * 0.05), "Good Fit (5th Percentile)"),
+        (int(n * 0.05), "Good Fit (95th Percentile)"),
         (int(n * 0.50), "Moderate Fit (50th Percentile)"),
-        (int(n * 0.95), "Poor Fit (95th Percentile)")
+        (int(n * 0.95), "Poor Fit (5th Percentile)")
     ]
     
     subjects = []
@@ -108,7 +108,7 @@ def get_subject_params(params_file, subject_id, year='baseline'):
 
 def run_simulation(params, n_repeat=1):
     """Runs the POMDP simulation n times and returns concatenated results."""
-    pomdp = POMDP(**params)
+    pomdp = POMDP(**params, ndt=0, rate_stop_trial=1/6)
     pomdp.value_iteration_tensor()
 
     sim_dfs = []

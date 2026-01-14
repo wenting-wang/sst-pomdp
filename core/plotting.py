@@ -7,8 +7,33 @@ import pandas as pd
 
 from core import simulation
 
-
 def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, saveto=None):
+    # ==========================================
+    # 🎨 TUNING SECTION: ADJUST STYLE HERE
+    # ==========================================
+    style = {
+        # Mean Lines (The thick background curves)
+        "mean_lw": 1.5,          # Thickness
+        "mean_alpha": 1.0,       # Opacity (0.0 - 1.0)
+        "sem_alpha": 0.4,        # Opacity of the shaded error band
+
+        # Individual Samples (The wiggly lines)
+        "sample_active_lw": 0.7,    # Thickness (Pre-decision)
+        "sample_active_alpha": 0.9, # Opacity (Pre-decision)
+        
+        "sample_shadow_lw": 0.7,    # Thickness (Post-decision ghost)
+        "sample_shadow_alpha": 0.2, # Opacity (Post-decision ghost)
+
+        # Decision Dot (The marker at the decision point)
+        "marker_size": 30,       # Size of the dot
+        "marker_alpha": 1.0,     # Opacity
+        "marker_edge_width": 0.5,# White border thickness around dot
+
+        # SSD Vertical Lines
+        "ssd_lw": 1.2,
+        "ssd_alpha": 0.8,
+    }
+    # ==========================================
 
     colors = {
         "beta": "#4E7C59",
@@ -22,6 +47,7 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
     df_stop = pd.DataFrame(out_stop)
     ssd = df_stop.iloc[0]['ssd'] if len(df_stop) > 0 else None
 
+    # Filter by result type
     df_gs = df_go[df_go['result'] == 'GS']
     df_ge = df_go[df_go['result'] == 'GE']
     df_gm = df_go[df_go['result'] == 'GM']
@@ -29,16 +55,10 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
     df_se = df_stop[df_stop['result'] == 'SE']
 
     df_list = [df_gs, df_ge, df_gm, df_ss, df_se]
-    condition_names = [
-        'Go Success',
-        'Go Error',
-        'Go Missing',
-        'Stop Success',
-        'Stop Error'
-    ]
+    condition_names = ['Go Success', 'Go Error', 'Go Missing', 'Stop Success', 'Stop Error']
 
     fig, ax = plt.subplots(2, 3, figsize=(12, 7))
-    x_range = np.arange(1, 41)
+    x_range_full = np.arange(1, 41) 
     xticks = [1, 10, 20, 30, 40]
 
     for i, df in enumerate(df_list):
@@ -49,214 +69,262 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
             axis.axis('off')
             continue
 
-        # Compute means and SEM
+        # --- 1. Plot Means (Background) ---
         beta_mean = df['beta_seq'].apply(lambda x: pd.Series(x)).mean()
         beta_sem = df['beta_seq'].apply(lambda x: pd.Series(x)).sem()
         sigma_mean = df['sigma_seq'].apply(lambda x: pd.Series(x)).mean()
         sigma_sem = df['sigma_seq'].apply(lambda x: pd.Series(x)).sem()
 
-        # Plot main curves
-        axis.plot(x_range, beta_mean, label=r'$\beta^\nu_t$',
-                    color=colors["beta"], linewidth=1.5)
-        axis.fill_between(x_range, beta_mean - beta_sem, beta_mean + beta_sem,
-                            color=colors["beta"], alpha=0.5)
+        curr_len_mean = len(beta_mean)
+        x_range_mean = x_range_full[:curr_len_mean]
 
-        axis.plot(x_range, sigma_mean, label=r'$\sigma^\nu_t$',
-                    color=colors["sigma"], linewidth=1.5)
-        axis.fill_between(x_range, sigma_mean - sigma_sem, sigma_mean + sigma_sem,
-                            color=colors["sigma"], alpha=0.5)
+        axis.plot(x_range_mean, beta_mean, label=r'$\beta^\nu_t$',
+                  color=colors["beta"], linewidth=style['mean_lw'], alpha=style['mean_alpha'])
+        axis.fill_between(x_range_mean, beta_mean - beta_sem, beta_mean + beta_sem,
+                          color=colors["beta"], alpha=style['sem_alpha'])
 
-        # Plot individual samples
+        axis.plot(x_range_mean, sigma_mean, label=r'$\sigma^\nu_t$',
+                  color=colors["sigma"], linewidth=style['mean_lw'], alpha=style['mean_alpha'])
+        axis.fill_between(x_range_mean, sigma_mean - sigma_sem, sigma_mean + sigma_sem,
+                          color=colors["sigma"], alpha=style['sem_alpha'])
+
+        # --- 2. Plot Individual Samples ---
         for j in range(min(show_cnt, len(df))):
-            axis.plot(x_range, df.iloc[j]['beta_seq'],
-                        color=colors["beta"], linewidth=0.8, alpha=0.6)
-            axis.plot(x_range, df.iloc[j]['sigma_seq'],
-                        color=colors["sigma"], linewidth=0.8, alpha=0.6)
+            row_data = df.iloc[j]
+            beta_seq = row_data['beta_seq']
+            sigma_seq = row_data['sigma_seq']
+            policy_seq = row_data['policy_seq']
 
-        # Add SSD marker lines
+            # Find decision time
+            decision_idx = len(policy_seq) - 1
+            decision_made = False
+            for t_idx, act in enumerate(policy_seq):
+                if act != 2: 
+                    decision_idx = t_idx
+                    decision_made = True
+                    break
+            
+            seq_len = len(beta_seq)
+            x_vals = x_range_full[:seq_len]
+
+            # --- Plot Beta ---
+            # Active
+            axis.plot(x_vals[:decision_idx+1], beta_seq[:decision_idx+1],
+                      color=colors["beta"], linewidth=style['sample_active_lw'], alpha=style['sample_active_alpha'])
+            # Shadow
+            if decision_idx < seq_len - 1:
+                axis.plot(x_vals[decision_idx:], beta_seq[decision_idx:],
+                          color=colors["beta"], linewidth=style['sample_shadow_lw'], alpha=style['sample_shadow_alpha'])
+            # Marker
+            if decision_made:
+                axis.scatter(x_vals[decision_idx], beta_seq[decision_idx], 
+                             s=style['marker_size'], color=colors["beta"], alpha=style['marker_alpha'], 
+                             zorder=3, edgecolors='white', linewidth=style['marker_edge_width'])
+
+            # --- Plot Sigma ---
+            # Active
+            axis.plot(x_vals[:decision_idx+1], sigma_seq[:decision_idx+1],
+                      color=colors["sigma"], linewidth=style['sample_active_lw'], alpha=style['sample_active_alpha'])
+            # Shadow
+            if decision_idx < seq_len - 1:
+                axis.plot(x_vals[decision_idx:], sigma_seq[decision_idx:],
+                          color=colors["sigma"], linewidth=style['sample_shadow_lw'], alpha=style['sample_shadow_alpha'])
+            # Marker
+            if decision_made:
+                axis.scatter(x_vals[decision_idx], sigma_seq[decision_idx], 
+                             s=style['marker_size'], color=colors["sigma"], alpha=style['marker_alpha'], 
+                             zorder=3, edgecolors='white', linewidth=style['marker_edge_width'])
+
+        # --- Formatting ---
         if condition_names[i].startswith('Stop') and ssd is not None:
-            axis.axvline(x=ssd + 1, color='k', linestyle='--', linewidth=1)
-            axis.axvline(x=ssd + 12 + 1, color='k',
-                            linestyle='--', linewidth=1)
+            axis.axvline(x=ssd + 1, color='k', linestyle='--', linewidth=style['ssd_lw'], alpha=style['ssd_alpha'])
+            axis.axvline(x=ssd + 12 + 1, color='k', linestyle='--', linewidth=style['ssd_lw'], alpha=style['ssd_alpha'])
 
         axis.set_xlim(1, 40)
-        axis.set_ylim(0, 1)
+        axis.set_ylim(0, 1.1)
         axis.set_xticks(xticks)
         axis.set_yticks(np.linspace(0, 1, 5))
-
-        axis.set_xlabel("Time Step", fontsize=12)
-        axis.set_ylabel(f"Belief State", fontsize=12)
         axis.set_title(f"{condition_names[i]}", pad=12, fontsize=14)
-
         axis.spines["top"].set_visible(False)
         axis.spines["right"].set_visible(False)
-        axis.tick_params(axis='both', which='both',
-                            direction='out', length=3, width=0.9)
 
-    # Hide unused subplot
     ax[1, 2].axis("off")
-
-    # plt.tight_layout()
-    plt.subplots_adjust(
-        hspace=0.5,
-        wspace=0.3,
-        top=0.92,
-        bottom=0.08,
-        left=0.08,
-        right=0.98
-    )
-
-    # Shared legend
-    handles, labels = ax[0, 0].get_legend_handles_labels()
-    dummy = Line2D([], [], color='none', label='Belief State:')
-    handles = [dummy] + handles
-    labels = ['Belief State'] + labels
-    fig.legend(
-        handles, labels,
-        loc='upper center',
-        bbox_to_anchor=(0.5, 1.05),
-        ncol=len(handles),
-        frameon=False,
-        fontsize=12
-    )
-    # Save or show
-    if saveto is not None:
-        # Make sure layout is applied before saving
-        fig.canvas.draw()
-        fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.02)
-        plt.close(fig)
-    else:
-        plt.show()
-
-def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5, saveto=None):
-
-    colors = {
-        "beta": "#4E7C59",
-        "sigma": "#B75D69",
-        "Q_L": "#E3B23C",
-        "Q_R": "#3A6EA5",
-        "Q_W": "#7A7A7A",
-    }
-
-    df_go = pd.DataFrame(out_go)
-    df_stop = pd.DataFrame(out_stop)
-    ssd = df_stop.iloc[0]['ssd'] if len(df_stop) > 0 else None
-
-    df_gs = df_go[df_go['result'] == 'GS']
-    df_ge = df_go[df_go['result'] == 'GE']
-    df_gm = df_go[df_go['result'] == 'GM']
-    df_ss = df_stop[df_stop['result'] == 'SS']
-    df_se = df_stop[df_stop['result'] == 'SE']
-
-    df_list = [df_gs, df_ge, df_gm, df_ss, df_se]
-    condition_names = [
-        'Go Success',
-        'Go Error',
-        'Go Missing',
-        'Stop Success',
-        'Stop Error'
-    ]
-
-    fig, ax = plt.subplots(2, 3, figsize=(12, 7))
-    x_range = np.arange(1, 41)
-    xticks = [1, 10, 20, 30, 40]
-
-    for i, df in enumerate(df_list):
-        row, col = divmod(i, 3)
-        axis = ax[row, col]
-
-        if len(df) == 0:
-            axis.axis('off')
-            continue
-
-        # Mean & SEM
-        left_mean = df['value_left_seq'].apply(
-            lambda x: pd.Series(x)).mean()
-        left_sem = df['value_left_seq'].apply(lambda x: pd.Series(x)).sem()
-        right_mean = df['value_right_seq'].apply(
-            lambda x: pd.Series(x)).mean()
-        right_sem = df['value_right_seq'].apply(
-            lambda x: pd.Series(x)).sem()
-        wait_mean = df['value_wait_seq'].apply(
-            lambda x: pd.Series(x)).mean()
-        wait_sem = df['value_wait_seq'].apply(lambda x: pd.Series(x)).sem()
-
-        # Main value lines
-        axis.plot(x_range, left_mean, label=r'$Q^\nu_t(b^\nu_t, L)$',
-                    color=colors["Q_L"], linewidth=1.5)
-        axis.fill_between(x_range, left_mean - left_sem,
-                            left_mean + left_sem, color=colors["Q_L"], alpha=0.5)
-
-        axis.plot(x_range, right_mean,
-                    label=r'$Q^\nu_t(b^\nu_t, R)$', color=colors["Q_R"], linewidth=1.5)
-        axis.fill_between(x_range, right_mean - right_sem,
-                            right_mean + right_sem, color=colors["Q_R"], alpha=0.5)
-
-        axis.plot(x_range, wait_mean, label=r'$Q^\nu_t(b^\nu_t, W)$',
-                    color=colors["Q_W"], linewidth=1.5)
-        axis.fill_between(x_range, wait_mean - wait_sem,
-                            wait_mean + wait_sem, color=colors["Q_W"], alpha=0.5)
-
-        # Trial samples
-        for j in range(min(show_cnt, len(df))):
-            axis.plot(x_range, df.iloc[j]['value_left_seq'],
-                        color=colors["Q_L"], alpha=0.6, linewidth=0.8)
-            axis.plot(
-                x_range, df.iloc[j]['value_right_seq'], color=colors['Q_R'], alpha=0.6, linewidth=0.8)
-            axis.plot(x_range, df.iloc[j]['value_wait_seq'],
-                        color=colors['Q_W'], alpha=0.6, linewidth=0.8)
-
-        # SSD markers for stop trials
-        if condition_names[i].startswith('Stop') and ssd is not None:
-            axis.axvline(x=ssd + 1, color='k', linestyle='--', linewidth=1)
-            axis.axvline(x=ssd + 12 + 1, color='k',
-                            linestyle='--', linewidth=1)
-
-        axis.set_xlim(1, 40)
-        # axis.set_ylim(0, 2.5)
-        axis.set_xticks(xticks)
-        axis.set_xlabel("Time Step", fontsize=12)
-        axis.set_ylabel(f"Action Value", fontsize=12)
-        axis.set_title(f"{condition_names[i]}", fontsize=14, pad=12)
-
-        axis.spines["top"].set_visible(False)
-        axis.spines["right"].set_visible(False)
-        axis.tick_params(axis='both', which='both',
-                            direction='out', length=3, width=0.9)
-
-    # Hide unused subplot
-    ax[1, 2].axis("off")
-
-    # plt.tight_layout()
-    plt.subplots_adjust(
-        hspace=0.5,
-        wspace=0.3,
-        top=0.92,
-        bottom=0.08,
-        left=0.08,
-        right=0.98
-    )
+    plt.subplots_adjust(hspace=0.5, wspace=0.3, top=0.92, bottom=0.08, left=0.08, right=0.98)
 
     # Legend
     handles, labels = ax[0, 0].get_legend_handles_labels()
-    dummy = Line2D([], [], color='none', label='Action Value:')
-    handles = [dummy] + handles
-    labels = ['Action Value'] + labels
-    fig.legend(
-        handles, labels,
-        loc='upper center',
-        bbox_to_anchor=(0.5, 1.05),
-        ncol=len(handles),
-        frameon=False,
-        fontsize=12
-    )        # Save or show
-    if saveto is not None:
-        # Make sure layout is applied before saving
-        fig.canvas.draw()
-        fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.02)
+    by_label = dict(zip(labels, handles))
+    dummy = Line2D([], [], color='none', label='Belief State:')
+    final_handles = [dummy] + [by_label[k] for k in [r'$\beta^\nu_t$', r'$\sigma^\nu_t$']]
+    final_labels = ['Belief State'] + [r'$\beta^\nu_t$', r'$\sigma^\nu_t$']
+    
+    fig.legend(final_handles, final_labels, loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=3, frameon=False, fontsize=13)
+
+    if saveto:
+        fig.savefig(saveto, dpi=300, bbox_inches='tight')
         plt.close(fig)
     else:
         plt.show()
+
+
+def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5, saveto=None):
+    # ==========================================
+    # 1. CONFIGURATION
+    # ==========================================
+    STYLE = {
+        "mean_lw": 1.5, "mean_alpha": 1.0, "sem_alpha": 0.4,
+        "sample_active_lw": 0.7, "sample_active_alpha": 0.9,
+        "sample_shadow_lw": 0.7, "sample_shadow_alpha": 0.2,
+        "marker_size": 30, "marker_alpha": 1.0, "marker_edge_width": 0.5,
+        "ssd_lw": 1.2, "ssd_alpha": 0.8,
+    }
+
+    # Centralized config for the 3 curves (Column Name, Label, Color)
+    METRICS = [
+        ('value_left_seq',  r'$Q^\nu_t(\beta^\nu_t, L)$', "#E3B23C"),
+        ('value_right_seq', r'$Q^\nu_t(\beta^\nu_t, R)$', "#3A6EA5"),
+        ('value_wait_seq',  r'$Q^\nu_t(\beta^\nu_t, W)$', "#7A7A7A")
+    ]
+
+    # ==========================================
+    # 2. DATA PREPARATION
+    # ==========================================
+    df_go = pd.DataFrame(out_go)
+    df_stop = pd.DataFrame(out_stop)
+    
+    # Safely get SSD (handling empty stop df)
+    ssd = df_stop.iloc[0]['ssd'] if not df_stop.empty else None
+
+    # Define conditions and titles
+    conditions = [
+        (df_go, 'GS', 'Go Success'),
+        (df_go, 'GE', 'Go Error'),
+        (df_go, 'GM', 'Go Missing'),
+        (df_stop, 'SS', 'Stop Success'),
+        (df_stop, 'SE', 'Stop Error')
+    ]
+
+    # ==========================================
+    # 3. PLOTTING LOOP
+    # ==========================================
+    fig, axes = plt.subplots(2, 3, figsize=(12, 7))
+    ax_flat = axes.flatten() # Flattens the 2x3 grid to 1D array for easier indexing
+    
+    x_range_full = np.arange(1, 41)
+    
+    for i, (source_df, result_code, title) in enumerate(conditions):
+        ax = ax_flat[i]
+        
+        # Filter Data
+        df = source_df[source_df['result'] == result_code]
+        if df.empty:
+            ax.axis('off')
+            continue
+
+        # --- A. Plot Means & SEM (Background) ---
+        for col_name, label, color in METRICS:
+            # OPTIMIZATION: Convert list-column to DataFrame efficiently
+            expanded_data = pd.DataFrame(df[col_name].tolist())
+            
+            mean_seq = expanded_data.mean(axis=0)
+            sem_seq = expanded_data.sem(axis=0)
+            x_vals = x_range_full[:len(mean_seq)]
+
+            ax.plot(x_vals, mean_seq, label=label, color=color, 
+                    lw=STYLE['mean_lw'], alpha=STYLE['mean_alpha'])
+            ax.fill_between(x_vals, mean_seq - sem_seq, mean_seq + sem_seq, 
+                            color=color, alpha=STYLE['sem_alpha'])
+
+        # --- B. Plot Individual Samples ---
+        # Only take the first 'show_cnt' rows
+        subset = df.iloc[:show_cnt]
+        
+        for _, row_data in subset.iterrows():
+            policy_seq = row_data['policy_seq']
+            
+            # Find decision point (first index where action != 2)
+            # np.where returns a tuple, we take the first element if it exists
+            decision_indices = np.where(np.array(policy_seq) != 2)[0]
+            if len(decision_indices) > 0:
+                decision_idx = decision_indices[0]
+                decision_made = True
+            else:
+                decision_idx = len(policy_seq) - 1
+                decision_made = False
+
+            # Inner helper to draw segments
+            def draw_segment(vals, color):
+                seq_len = len(vals)
+                x_vals = x_range_full[:seq_len]
+                
+                # 1. Active Path (up to decision)
+                ax.plot(x_vals[:decision_idx+1], vals[:decision_idx+1],
+                        color=color, alpha=STYLE['sample_active_alpha'], lw=STYLE['sample_active_lw'])
+                
+                # 2. Decision Dot
+                if decision_made:
+                    ax.scatter(x_vals[decision_idx], vals[decision_idx],
+                               s=STYLE['marker_size'], color=color, alpha=STYLE['marker_alpha'], 
+                               zorder=3, edgecolors='white', lw=STYLE['marker_edge_width'])
+                
+                # 3. Shadow Path (after decision)
+                if decision_idx < seq_len - 1:
+                    ax.plot(x_vals[decision_idx:], vals[decision_idx:],
+                            color=color, alpha=STYLE['sample_shadow_alpha'], lw=STYLE['sample_shadow_lw'])
+
+            # Loop through metrics to plot segments
+            for col_name, _, color in METRICS:
+                draw_segment(row_data[col_name], color)
+
+        # --- C. Aesthetics & SSD ---
+        if title.startswith('Stop') and ssd is not None:
+            for x_line in [ssd + 1, ssd + 12 + 1]:
+                ax.axvline(x=x_line, color='k', ls='--', lw=STYLE['ssd_lw'], alpha=STYLE['ssd_alpha'])
+
+        ax.set_xlim(1, 40)
+        ax.set_xticks([1, 10, 20, 30, 40])
+        ax.set_title(title, fontsize=14, pad=12)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # Turn off the unused 6th subplot (index 5)
+    ax_flat[5].axis("off")
+    
+    plt.subplots_adjust(hspace=0.5, wspace=0.3, top=0.92, bottom=0.08, left=0.08, right=0.98)
+
+    # ==========================================
+    # 4. ROBUST LEGEND
+    # ==========================================
+    # Gather handles from the first valid plot (ax_flat[0])
+    handles, labels = ax_flat[0].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    
+    # Extract just the labels we want from our METRICS config
+    target_keys = [m[1] for m in METRICS] # Gets the LaTeX strings
+    
+    dummy = Line2D([], [], color='none')
+    final_handles = [dummy]
+    final_labels = ['Action Value']
+
+    for k in target_keys:
+        if k in by_label:
+            final_handles.append(by_label[k])
+            final_labels.append(k)
+    
+    fig.legend(
+        final_handles, final_labels, 
+        loc='upper center', bbox_to_anchor=(0.5, 1.05), 
+        ncol=len(final_handles), frameon=False, fontsize=13
+    )
+
+    if saveto:
+        fig.savefig(saveto, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+    else:
+        plt.show()
+
+
+
 
 def plot_policy(model, saveto, dpi=150):
     """
@@ -273,21 +341,23 @@ def plot_policy(model, saveto, dpi=150):
     policy = model.policy[:-1, :, :].copy()
     num_timesteps = policy.shape[0]
 
-    # Mask undefined beliefs
-    beta = 0.5
-    zeta = 0
-    for i in range(num_timesteps):
-        beta = model.update_beta(beta, zeta=0, x=1)
-        beta_idx = int(beta * model.bins)
-        beta_idx = np.clip(beta_idx, 0, model.bins - 1)
-        policy[i, beta_idx + 2:, :] = np.nan
-        policy[i, :(model.bins - beta_idx) - 1, :] = np.nan
+    # # Mask undefined beliefs
+    # beta = 0.5
+    # zeta = 0
+    # for i in range(num_timesteps):
+    #     beta = model.update_beta(beta, zeta=0, x=1)
+    #     beta_idx = int(beta * model.bins)
+    #     beta_idx = np.clip(beta_idx, 0, model.bins - 1)
+    #     policy[i, beta_idx + 2:, :] = np.nan
+    #     policy[i, :(model.bins - beta_idx) - 1, :] = np.nan
 
-        zeta = model.update_zeta(zeta, 1, i)
-        sigma = model.update_sigma(zeta, i)
-        sigma_idx = int(sigma * model.bins)
-        sigma_idx = np.clip(sigma_idx, 0, model.bins - 1)
-        policy[i, :, sigma_idx + 2:] = np.nan
+    #     zeta = model.update_zeta(zeta, 1, i)
+    #     sigma = model.update_sigma(zeta, i)
+    #     sigma_idx = int(sigma * model.bins)
+    #     sigma_idx = np.clip(sigma_idx, 0, model.bins - 1)
+    #     policy[i, :, sigma_idx + 2:] = np.nan
+
+
 
     # Define color mapping
     cmap = ListedColormap(
@@ -303,7 +373,10 @@ def plot_policy(model, saveto, dpi=150):
     axes = np.array(axes).reshape(-1)
 
     for i in range(num_timesteps):
-        matrix_plot = np.where(np.isnan(policy[i]), 3, policy[i])
+        # matrix_plot = np.where(np.isnan(policy[i]), 3, policy[i])
+        matrix_plot = model.policy[i].copy()
+        matrix_plot[np.isnan(matrix_plot)] = 3
+
         ax = axes[i]
         img = ax.imshow(matrix_plot, cmap=cmap,
                         norm=norm, extent=[0, 1, 0, 1])
@@ -691,7 +764,7 @@ def plot_rate_timecourses(
     )
     leg.get_title().set_fontsize(12)
 
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, 1.1)
     ax.set_xlim(1, t_max)
     ax.set_xticks(xticks)
     ax.set_xlabel("Time Step", fontsize=12)
@@ -816,7 +889,7 @@ def plot_rate_behavior(
                 yerr=beh["stop_succ_sem"], label="Stop", **k_stop)
     ax.set_xlabel(r"Stop Probability $\tilde{r}^{\nu}$", fontsize=12)
     ax.set_ylabel("Accuracy", fontsize=12)
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, 1.1)
     # ax.legend(frameon=False, ncol=2)
     ax.legend(
         frameon=False,

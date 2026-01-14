@@ -48,7 +48,7 @@ python tesbi.py --stage recover --K 200 --num_post 4000
 
 # 4. Inference on Real Data (All subjects)
 python tesbi.py --stage posterior \
-  --sst_folder "/home/wwang/data/sst_valid_raw" \
+  --sst_folder "/home/wwang/data/sst_valid_base" \
   --glob_pat "NDAR_*.csv.zip" \
   --num_samples 10000
 
