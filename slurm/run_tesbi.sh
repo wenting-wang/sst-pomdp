@@ -1,7 +1,6 @@
 #!/bin/bash -l
-#SBATCH --job-name=PIPELINE
+#SBATCH --job-name=TeSBI
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1          
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32

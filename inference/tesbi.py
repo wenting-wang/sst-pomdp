@@ -98,18 +98,18 @@ PARAM_RANGES = {
     "q_s_n": (0.0, 1.0),
     "q_s":   (0.5, 1.0),
     "cost_stop_error": (3e-5, 2.0),
-    "cost_time":       (3e-5, 0.003),
-    "ndt":            (3e-5, 30.0),
+    "cost_time":       (1e-5, 0.1),
+    "ndt":            (0.0, 25.0),
+    "inv_temp":        (0.1, 10.0),
 }
 
-LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s"]
-LOG_PARAMS = ["cost_stop_error", "cost_time", "ndt"]
+LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s", "ndt"]
+LOG_PARAMS = ["cost_stop_error", "cost_time", "inv_temp"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
 
 FIXED_PARAMS = {
     "cost_go_error":   1.0,
     "cost_go_missing": 1.0,
-    "inv_temp":        50.0,
     "rate_stop_trial": 1.0 / 6.0,
 }
 
@@ -134,6 +134,9 @@ def simulate_data(params: Dict[str, float], seed: Optional[int] = None) -> pd.Da
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
+    
+    if 'ndt' in params:
+        params['ndt'] = int(round(params['ndt']))
     
     pomdp = POMDP(**params)
     pomdp.value_iteration_tensor()

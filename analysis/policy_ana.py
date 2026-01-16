@@ -17,8 +17,8 @@ SUBJECT_ID = 'INVJTCXNL4V'
 FIXED_PARAMS = {
     'cost_go_error': 1.0,
     'cost_go_missing': 1.0,
-    'inv_temp': 50.0,
-    'ndt': 0,
+    'inv_temp': 0.5,
+    'ndt': 30,
     'rate_stop_trial': 1/6
 }
 
