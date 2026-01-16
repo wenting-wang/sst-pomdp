@@ -27,10 +27,9 @@ cd ${SCRATCH_DIRECTORY}
 
 # --- Copy Dependencies ---
 # Copy all necessary python scripts to the scratch location
-cp ${SLURM_SUBMIT_DIR}/models.py .
-cp ${SLURM_SUBMIT_DIR}/simulation.py .
-cp ${SLURM_SUBMIT_DIR}/metrics.py .
-cp ${SLURM_SUBMIT_DIR}/preprocessing.py .
+cp -r "${SLURM_SUBMIT_DIR}/core/"    .
+cp -r "${SLURM_SUBMIT_DIR}/utils/"   .
+cp "${SLURM_SUBMIT_DIR}/ppc.py"    .
 cp ${SLURM_SUBMIT_DIR}/${SCRIPT_NAME} .
 
 # --- Environment Setup ---

@@ -24,7 +24,7 @@ OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 RAW_DATA_DIR = BASE_DIR / "sst_valid_base"
 FILTER_CSV = OUT_DIR / "stats_beh_full.csv"
 PPC_METRICS_CSV = OUT_DIR / "ppc_metrics.csv"  # Output from ppc.py
-PARAMS_CSV = "/kyb/agpd/wwang/data/res_831632/posterior_summary_all.csv" # NDT
+PARAMS_CSV = "/kyb/agpd/wwang/data/res_831632/posterior_summary.csv" # NDT
 
 # Output
 OUTPUT_IMAGE = OUT_DIR / "ppc_v2.png" # representative subjects

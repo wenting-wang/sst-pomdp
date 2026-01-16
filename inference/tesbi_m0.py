@@ -115,7 +115,7 @@ STD_STD_PATH = ART_DIR / "embeds_std.npy"
 POST1_PATH = ART_DIR / "posterior_round1.pkl"
 POSTF_PATH = ART_DIR / "posterior_final.pkl"
 RECOVERY_CSV = ART_DIR / "recovery_details.csv"
-POST_SUMMARY_CSV = ART_DIR / "posterior_summary_all.csv"
+POST_SUMMARY_CSV = ART_DIR / "posterior_summary.csv"
 
 
 # --- 1. Simulator Wrapper ---

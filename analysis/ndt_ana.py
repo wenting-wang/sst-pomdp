@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import os
 
 # Your file path
-file_path = "/kyb/agpd/wwang/data/res_831632/posterior_summary_all.csv"
+file_path = "/kyb/agpd/wwang/data/res_831633/posterior_summary.csv"
 
 def analyze_ndt(path):
     if not os.path.exists(path):

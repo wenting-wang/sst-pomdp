@@ -1,10 +1,12 @@
 #!/bin/bash -l
 #SBATCH --job-name=PIPELINE
-#SBATCH --partition=compute
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1          
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=32
 #SBATCH --time=20-00:00:00
+#SBATCH --mem=32G
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=wenting.wang.cd@outlook.com
 #SBATCH --output=slurm-%j.out
@@ -19,6 +21,7 @@ set -eo pipefail
 # --- OPTION A: SMOKE TEST (Fast, for debugging) ---
 N1_PRE=100
 EPOCHS=2
+PATIENCE=1           # Stop if no improvement for 15 epochs
 N2=100
 DENSITY=maf            # MAF is faster/more stable for very small samples
 REC_K=5
@@ -27,12 +30,13 @@ NUM_SAMPLES_INF=3      # Small number of posterior samples per subject
 
 # --- OPTION B: REAL RUN (Production) ---
 # N1_PRE=30000
-# EPOCHS=8
+# EPOCHS=100
+# PATIENCE=15           # Stop if no improvement for 15 epochs
 # N2=20000
 # DENSITY=nsf              # NSF is generally more expressive for complex posteriors
 # REC_K=200
 # REC_NUM_POST=4000
-# NUM_SAMPLES_INF=14988    # High number of posterior samples
+# NUM_SAMPLES_INF=4000    # Number of posterior samples per subject
 
 # --- DATA PATHS ---
 # Set folder to process real data (leave empty "" to skip Stage 4)
@@ -84,7 +88,8 @@ echo "[Stage 1] Pretraining Encoder..."
 srun --cpu-bind=cores python tesbi.py \
   --stage pretrain \
   --n1_pre ${N1_PRE} \
-  --epochs ${EPOCHS}
+  --epochs ${EPOCHS} \
+  --patience ${PATIENCE}
 
 # --- Stage 2: Train SNPE ---
 echo "[Stage 2] Training SNPE (density=${DENSITY})..."

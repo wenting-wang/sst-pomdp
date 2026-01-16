@@ -16,7 +16,7 @@ BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Input Files
-# Update this path to point to your specific summary file (e.g., posterior_summary_all.csv)
+# Update this path to point to your specific summary file (e.g., posterior_summary.csv)
 PARAMS_CSV = OUT_DIR / "posterior_summary.csv" 
 
 # Simulation Settings

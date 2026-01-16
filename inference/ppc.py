@@ -14,40 +14,38 @@ from core import simulation
 # --- Configuration ---
 
 # ==========================================
-# OPTION 1: Local / Mac Configuration (Active)
+# OPTION 1: Local / Mac Configuration (Local Test)
 # ==========================================
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
-OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+# BASE_DIR = Path('/kyb/agpd/wwang/data/')
+# OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
-RAW_DATA_DIR = BASE_DIR / "sst_valid_base"
-VALID_FILES_LIST = BASE_DIR / "sst_valid_filenames.txt"
-POSTERIOR_SUMMARY_CSV = OUT_DIR / "posterior_summary.csv"
-OUTPUT_PPC_CSV = OUT_DIR / "ppc_metrics.csv"
-
+# RAW_DATA_DIR = BASE_DIR / "sst_valid_base"
+# POSTERIOR_SUMMARY_CSV = OUT_DIR / "posterior_summary.csv"
+# OUTPUT_PPC_CSV = OUT_DIR / "ppc_metrics.csv"
 
 # ==========================================
-# OPTION 2: HPC Configuration (Uncomment to use)
+# OPTION 2: HPC Configuration
 # ==========================================
-# # Base paths
-# RAW_DATA_DIR = Path("/home/wwang/data/sst_valid_base")
-# WORK_DIR = Path("/home/wwang/823879") # Or your specific output folder
+# Base paths
+RAW_DATA_DIR = Path("/home/wwang/data/sst_valid_base")
+WORK_DIR = Path("/home/wwang/831633") 
 
-# # Input Files
-# # Note: This script supports both .txt (list of filenames) and .csv (dataframe with 'filename' col)
-# VALID_FILES_LIST = Path("/home/wwang/sst_valid_filenames.csv") 
-# POSTERIOR_SUMMARY_CSV = Path("/home/wwang/ptmp/823879/outputs/posterior_summary.csv")
+# Input: Posterior Summary
+POSTERIOR_SUMMARY_CSV = Path("/home/wwang/ptmp/831633/outputs/posterior_summary.csv")
 
-# # Output File
-# OUTPUT_PPC_CSV = Path("/home/wwang/823879/ppc_metrics.csv")
+# Output: PPC Metrics
+OUTPUT_PPC_CSV = Path("/home/wwang/831633/ppc_metrics.csv")
 # ==========================================
 
 
 # Model Constants
 FIXED_PARAMS = {
-    "cost_go_error": 1.0, 
-    "cost_go_missing": 1.0, 
-    "inv_temp": 50.0,
+    "cost_go_error":   1.0,
+    "cost_go_missing": 1.0,
+    "inv_temp":        50.0,
+    "rate_stop_trial": 1.0 / 6.0,
 }
+
 LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s"]
 LOG_PARAMS = ["cost_stop_error", "cost_time", "ndt"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
@@ -67,8 +65,7 @@ def load_posterior_mean(summary_csv: Path, subject_id: str) -> Dict[str, float]:
     """
     Loads the MAP (Mean) parameter estimates for a specific subject.
     """
-    # Load entire summary (cached by OS usually, or optimized if passed as df)
-    # For efficiency in a loop, it's better to load this once outside, but here is per-call safe.
+    # Load entire summary
     df = pd.read_csv(summary_csv)
     
     # Filter for subject
@@ -96,12 +93,11 @@ def simulate_task(params: Dict[str, float], config: SimConfig, seed: int) -> Opt
         np.random.seed(seed)
         
         # Initialize and Run Model
-        agent = POMDP(**params, rate_stop_trial=config.rate_stop_trial)
+        agent = POMDP(**params)
         agent.value_iteration_tensor()
         sim_data = simulation.simu_task(agent)
         
         # Convert to DataFrame
-        # Columns must match what 'metrics.py' expects: 'result', 'rt', 'ssd'
         return pd.DataFrame(sim_data, columns=["result", "rt", "ssd"])
         
     except Exception as e:
@@ -136,7 +132,6 @@ def run_ppc_single_subject(subject_id: str, filename: str, config: SimConfig) ->
             return {"subject_id": subject_id, "error": "Simulation returned empty"}
 
         # 4. Compute Metrics (Distance between Obs and Sim)
-        # Unpack the tuple returned by get_distance
         (
             d_p_gs, d_p_ge, d_p_gm, d_p_ss,
             d_ws_gs, d_ws_ge, d_ws_se,
@@ -170,31 +165,38 @@ def main():
     # 1. Setup
     config = SimConfig()
     
-    # Load list of valid files to process
-    if not VALID_FILES_LIST.exists():
-        print(f"Error: File list not found at {VALID_FILES_LIST}")
+    # Check Directory
+    if not RAW_DATA_DIR.exists():
+        print(f"Error: Data directory not found at {RAW_DATA_DIR}")
         return
 
-    with open(VALID_FILES_LIST, 'r') as f:
-        filenames = [line.strip() for line in f if line.strip()]
+    # 2. Get All Files directly from Directory
+    # We iterate over the directory and grab all non-hidden files
+    file_paths = [p for p in RAW_DATA_DIR.iterdir() if p.is_file() and not p.name.startswith('.')]
+    
+    # Extract just the filenames (strings) as the worker expects
+    filenames = [p.name for p in file_paths]
 
-    print(f"Starting PPC for {len(filenames)} subjects...")
+    print(f"Found {len(filenames)} files in {RAW_DATA_DIR}")
     print(f"Using Posterior Summary: {POSTERIOR_SUMMARY_CSV}")
 
     results = []
     
-    # 2. Parallel Processing
-    # Adjust max_workers based on your CPU cores
+    # 3. Parallel Processing
     with ProcessPoolExecutor() as executor:
         futures = {}
         for fname in filenames:
             # Extract ID from filename: "NDAR_INV123_baseline..." -> "INV123"
             parts = fname.split('_')
+            
+            # Safety check: Ensure filename format is correct before processing
             if len(parts) > 1:
                 sid = parts[1]
                 futures[executor.submit(run_ppc_single_subject, sid, fname, config)] = sid
+            else:
+                print(f"Skipping file with unexpected format: {fname}")
 
-        # 3. Collect Results
+        # 4. Collect Results
         for future in as_completed(futures):
             sid = futures[future]
             try:
@@ -202,16 +204,20 @@ def main():
                 if res.get("error"):
                     print(f"[{sid}] Failed: {res['error']}")
                 else:
-                    # Optional: Print a dot or small log to show progress
+                    # Success
                     pass 
                 results.append(res)
             except Exception as e:
                 print(f"[{sid}] Critical Exception: {e}")
 
-    # 4. Save Output
+    # 5. Save Output
+    if not results:
+        print("No results generated. Check input directory.")
+        return
+
     df_results = pd.DataFrame(results)
     
-    # Move 'error' column to the end or drop rows with errors
+    # Clean errors
     if 'error' in df_results.columns:
         df_clean = df_results[df_results['error'].isna()].drop(columns=['error'])
         print(f"Simulation completed. Success: {len(df_clean)}/{len(filenames)}")
