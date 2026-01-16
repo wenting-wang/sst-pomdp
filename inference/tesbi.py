@@ -89,12 +89,6 @@ from core import simulation
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-@dataclass
-class SimulationBlock:
-    omegas: torch.Tensor
-    X: List[torch.Tensor]
-
-
 # --- Configuration ---
 
 # Parameter Ranges
@@ -388,24 +382,6 @@ class SummaryStandardizer:
 
 # --- 6. Pipeline Stages ---
 
-@dataclass
-class SimBlock:
-    omegas: torch.Tensor
-    embeds: np.ndarray
-
-def simulate_round(prior_sampler, N, encoder, seed_offset=0):
-    omegas = prior_sampler((N,))
-    embeds = []
-    for i in range(N):
-        params = untransform(omegas[i])
-        df = simulate_data(params, seed=seed_offset + i)
-        X = build_per_trial_features(df)
-        with torch.no_grad():
-            z = encoder(torch.tensor(X[None, ...], dtype=torch.float32))
-        embeds.append(z.squeeze(0).numpy())
-    return SimBlock(omegas=omegas, embeds=np.vstack(embeds))
-
-
 def run_pretrain(args, prior, D):
     print(f"[Pretrain] Simulating {args.n1_pre} pairs...")
     omegas = prior.sample((args.n1_pre,))
@@ -425,10 +401,18 @@ def run_pretrain(args, prior, D):
     print(f"[Pretrain] Encoder saved to {ENC_PATH}")
 
 
-# --- 1. Helper Function for Simulation + GPU Embedding ---
+@dataclass
+class SimulationBlock:
+    """
+    Used for SNPE rounds to store parameters and their neural embeddings.
+    """
+    omegas: torch.Tensor
+    embeds: torch.Tensor
+
 def simulate_round(sampler_fn, n_samples, encoder, seed_offset=0):
     """
-    Simulates data, generates embeddings on GPU, and moves them back to CPU.
+    Simulates data on CPU, generates embeddings on GPU, 
+    and returns a SimulationBlock.
     """
     omegas = sampler_fn((n_samples,))
     
@@ -436,27 +420,24 @@ def simulate_round(sampler_fn, n_samples, encoder, seed_offset=0):
     X_list = []
     for i in range(n_samples):
         params = untransform(omegas[i])
-        # Note: Ensure simulate_data and build_per_trial_features are defined elsewhere
         df = simulate_data(params, seed=seed_offset + i) 
         X_list.append(build_per_trial_features(df))
 
     # 2. Embed (GPU)
-    # We process in batches to avoid OOM if N is huge, or just loop
     encoder.eval()
+    encoder.to(device) # device is defined at top of file
     embeds = []
     with torch.no_grad():
         for x_trial in X_list:
-            # Move input to GPU -> Encode -> Move result to CPU
+            # Move input to GPU -> Encode -> Move result back to CPU
+            # Processing trial-by-trial avoids GPU memory overflow
             emb = encoder(x_trial.to(device)).cpu()
             embeds.append(emb)
             
     embeds_tensor = torch.cat(embeds, dim=0)
     
-    # Return your data container (assuming SimulationBlock class exists)
     return SimulationBlock(omegas=omegas, embeds=embeds_tensor)
 
-
-# --- 2. Updated run_snpe (GPU Enabled) ---
 def run_snpe(args, prior, encoder):
     # Move Encoder to GPU
     encoder = encoder.to(device)
@@ -476,12 +457,9 @@ def run_snpe(args, prior, encoder):
 
     print(f"[Round1] Training SNPE ({args.density}) on {device}...")
     
-    # CHANGE 1: Pass device to SNPE
     inference = SNPE(prior=prior, density_estimator=args.density, device=str(device))
-    
     inference.append_simulations(block1.omegas, torch.tensor(embeds_1_z, dtype=torch.float32))
     
-    # CHANGE 2: Added stop_after_epochs (Early Stopping)
     density = inference.train(
         stop_after_epochs=20, 
         max_num_epochs=500

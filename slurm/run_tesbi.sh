@@ -64,10 +64,9 @@ echo "Running in scratch: ${SCRATCH_DIRECTORY}"
 
 # 3. Copy source files to scratch
 cd "${SCRATCH_DIRECTORY}"
-cp "${SLURM_SUBMIT_DIR}/models.py"                       .
-cp "${SLURM_SUBMIT_DIR}/simulation.py"                   .
-cp "${SLURM_SUBMIT_DIR}/preprocessing.py"                . || true
-cp "${SLURM_SUBMIT_DIR}/tesbi.py"   .
+cp -r "${SLURM_SUBMIT_DIR}/core/"    .
+cp -r "${SLURM_SUBMIT_DIR}/utils/"   .
+cp "${SLURM_SUBMIT_DIR}/tesbi.py"    .
 
 # Create output directory
 mkdir -p outputs
