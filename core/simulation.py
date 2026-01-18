@@ -185,7 +185,7 @@ def simu_task(model):
                 ssd_step = 2
                 first_ssd = False
             elif last_stop_result == 'SS':
-                ssd_step = min(ssd_step + 2, 36)
+                ssd_step = min(ssd_step + 2, 34)
             elif last_stop_result == 'SE':
                 ssd_step = max(ssd_step - 2, 2)
             ssd = ssd_step

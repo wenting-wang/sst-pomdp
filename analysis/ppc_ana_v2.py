@@ -231,8 +231,8 @@ def plot_model_fit(subjects, raw_data_dir, params_file, output_path):
                 color=COLOR_SIM, alpha=ALPHA_SIM, markersize=4)
         
         ax.set_ylim(-0.05, 1.05)
-        ax.set_xlim(0, 36)
-        ax.set_xticks([0, 10, 20, 30, 36])
+        ax.set_xlim(0, 34)
+        ax.set_xticks([0, 10, 20, 30, 34])
         ax.set_xlabel("SSD")
         if col_idx == 0: ax.set_ylabel("SS Rates over SSD", fontsize=12)
         _clean_spines(ax)

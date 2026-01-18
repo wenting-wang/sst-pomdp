@@ -176,64 +176,70 @@ def plot_model_fit(subjects, raw_data_dir, params_file, output_path):
         if col_idx == 0: ax.set_ylabel("Outcome Rates", fontsize=12)
         _clean_spines(ax)
 
-        # Row 1: Go Success RT (Histogram)
+        # Row 1: Go Success RT (Histogram) -> CONVERT TO MS
         ax = axs[1, col_idx]
-        bins = np.linspace(1, 41, 41)
-        ax.hist(df_obs[df_obs['result']=='GS']['rt'], bins=bins, density=True, 
+        
+        bins_ms = np.linspace(0, 1000, 41) 
+        step_size_ms = 25  # Each time step is 25 ms
+        ax.hist(df_obs[df_obs['result']=='GS']['rt'] * step_size_ms, bins=bins_ms, density=True, 
                 alpha=ALPHA_OBS, label='Obs', color=COLOR_OBS)
-        ax.hist(df_sim[df_sim['result']=='GS']['rt'], bins=bins, density=True, 
+        ax.hist(df_sim[df_sim['result']=='GS']['rt'] * step_size_ms, bins=bins_ms, density=True, 
                 alpha=ALPHA_SIM, label='Sim', color=COLOR_SIM)
-        ax.set_xlim(1, 41)
-        ax.set_xticks([1, 10, 20, 30, 40])
-        ax.set_xlabel("Time Steps", fontsize=10)
+        
+        ax.set_xlim(0, 1000)
+        ax.set_xticks([0, 250, 500, 750, 1000]) # Nice round numbers
+        ax.set_xlabel("Time (ms)", fontsize=10)
         if col_idx == 0: ax.set_ylabel("GS RT Density", fontsize=12)
         _clean_spines(ax)
 
-        # Row 2: Stop Error RT (Histogram)
+        # Row 2: Stop Error RT (Histogram) -> CONVERT TO MS
         ax = axs[2, col_idx]
-        ax.hist(df_obs[df_obs['result']=='SE']['rt'], bins=bins, density=True, 
+        ax.hist(df_obs[df_obs['result']=='SE']['rt'] * step_size_ms, bins=bins_ms, density=True, 
                 alpha=ALPHA_OBS, label='Obs', color=COLOR_OBS)
-        ax.hist(df_sim[df_sim['result']=='SE']['rt'], bins=bins, density=True, 
+        ax.hist(df_sim[df_sim['result']=='SE']['rt'] * step_size_ms, bins=bins_ms, density=True, 
                 alpha=ALPHA_SIM, label='Sim', color=COLOR_SIM)
-        ax.set_xlim(1, 41)
-        ax.set_xticks([1, 10, 20, 30, 40])
-        ax.set_xlabel("Time Steps", fontsize=10)
+        
+        ax.set_xlim(0, 1000)
+        ax.set_xticks([0, 250, 500, 750, 1000])
+        ax.set_xlabel("Time (ms)", fontsize=10)
         if col_idx == 0: ax.set_ylabel("SE RT Density", fontsize=12)
         _clean_spines(ax)
 
-        # Row 3: SSD Scatter
+        # Row 3: SSD Scatter -> CONVERT Y-AXIS TO MS
         ax = axs[3, col_idx]
-        # Plot Obs
-        ax.scatter(df_obs.index + 1, df_obs['ssd'], label='Obs', 
+        ax.scatter(df_obs.index + 1, df_obs['ssd'] * step_size_ms, label='Obs', 
                    color=COLOR_OBS, s=15, alpha=ALPHA_OBS, marker='o', edgecolors='none')
-        # Plot Sim (Overlay)
+        
         sim_trials = len(df_sim) // n_repeat
         current_len = min(sim_trials, len(df_obs))
         ssd_segment = df_sim.iloc[:current_len]['ssd']
-        ax.scatter(range(1, current_len + 1), ssd_segment, label='Sim', 
+        
+        ax.scatter(range(1, current_len + 1), ssd_segment * step_size_ms, label='Sim', 
                    color=COLOR_SIM, s=10, alpha=ALPHA_SIM, marker='o', edgecolors='none')
 
-        ax.set_xlim(1, 360)
+        ax.set_xlim(1 - 5, 360)
         ax.set_xticks([1, 120, 240, 360])
         ax.set_xlabel("Trials", fontsize=10)
-        if col_idx == 0: ax.set_ylabel("SSD", fontsize=12)
+        
+        ax.set_ylim(- 25, 35 * step_size_ms) # [2,34] time steps
+        ax.set_yticks([0, 300, 600, 850])
+        if col_idx == 0: ax.set_ylabel("SSD (ms)", fontsize=12)
         _clean_spines(ax)
-        ax.set_ylim(0, 37)
 
-        # Row 4: Inhibition Function
+        # Row 4: Inhibition Function -> CONVERT X-AXIS TO MS
         ax = axs[4, col_idx]
         prob_obs = _get_prob_ss(df_obs)
         prob_sim = _get_prob_ss(df_sim)
         
-        ax.plot(prob_obs.index, prob_obs.values, 'o-', label='Obs', 
+        ax.plot(prob_obs.index * step_size_ms, prob_obs.values, 'o-', label='Obs', 
                 color=COLOR_OBS, alpha=ALPHA_OBS, markersize=4)
-        ax.plot(prob_sim.index, prob_sim.values, 'o-', label='Sim', 
+        ax.plot(prob_sim.index * step_size_ms, prob_sim.values, 'o-', label='Sim', 
                 color=COLOR_SIM, alpha=ALPHA_SIM, markersize=4)
         
         ax.set_ylim(-0.05, 1.05)
-        ax.set_xlim(0, 36)
-        ax.set_xticks([0, 10, 20, 30, 36])
-        ax.set_xlabel("SSD")
+        ax.set_xlim(-25, 34 * step_size_ms)
+        ax.set_xticks([0, 300, 600, 850])
+        ax.set_xlabel("SSD (ms)")
         if col_idx == 0: ax.set_ylabel("SS Rates over SSD", fontsize=12)
         _clean_spines(ax)
 

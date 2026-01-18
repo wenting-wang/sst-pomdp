@@ -91,6 +91,7 @@ def main():
 
     # 2. Initialize POMDP
     print("\nInitializing POMDP Model...")
+
     pomdp = POMDP(**params)
     pomdp.value_iteration_tensor() 
 
