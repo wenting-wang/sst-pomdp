@@ -120,18 +120,18 @@ PARAM_RANGES = {
     "q_s":   (0.5, 1.0),
     "cost_stop_error": (3e-5, 2.0),
     "cost_time":       (1e-5, 0.1),
-    "ndt":            (0.0, 25.0),
-    "inv_temp":        (0.1, 10.0),
-}
+    "ndt":            (0.0, 25.0)
+    }
 
 LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s", "ndt"]
-LOG_PARAMS = ["cost_stop_error", "cost_time", "inv_temp"]
+LOG_PARAMS = ["cost_stop_error", "cost_time"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
 
 FIXED_PARAMS = {
     "cost_go_error":   1.0,
     "cost_go_missing": 1.0,
     "rate_stop_trial": 1.0 / 6.0,
+    "inv_temp":      1.0
 }
 
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
