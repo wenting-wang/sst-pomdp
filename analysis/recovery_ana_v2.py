@@ -14,7 +14,7 @@ BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
-RECOVERY_CSV = Path("/kyb/agpd/wwang/data/res_832861/recovery_details.csv")
+RECOVERY_CSV = Path("/kyb/agpd/wwang/data/res_833083/recovery_details.csv")
 
 # Output
 OUTPUT_PLOT = OUT_DIR / "param_recovery_v2.png"
