@@ -1122,8 +1122,8 @@ def plot_rate_timecourses(
     # ==========================================
     # 2. PLOTTING
     # ==========================================
-    fig, axes = plt.subplots(1, 2, figsize=(14*0.8, 6*0.8))
-    plt.subplots_adjust(wspace=0.3)
+    fig, axes = plt.subplots(1, 2, figsize=(16*0.8, 6*0.8))
+    plt.subplots_adjust(wspace=0.4)
 
     x_vals = np.arange(1, t_max + 1)
     
@@ -1182,29 +1182,48 @@ def plot_rate_timecourses(
                  fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
 
     # Legend Construction
-    legend_elements = []
-    # Title for Rate Color
-    legend_elements.append(Line2D([0], [0], color='w', label=r'$\bf{Stop\ Prior\ \tilde{r}^\nu}$'))
+    # 1. Create Handle List for RATES
+    rate_handles = []
     for r, col in zip(rates, rate_colors):
-        legend_elements.append(Line2D([0], [0], color=col, lw=3, label=f"{r:.2f}"))
+        rate_handles.append(Line2D([0], [0], color=col, lw=3, label=f"{r:.2f}"))
     
-    # Spacer
-    legend_elements.append(Line2D([0], [0], color='w', label=' '))
-    
-    # Title for Outcome Style
-    legend_elements.append(Line2D([0], [0], color='w', label=r'$\bf{Outcome}$'))
-    
+    # 2. Create Handle List for OUTCOMES
+    outcome_handles = []
     if trial_type == "stop":
-        legend_elements.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=2, label="Stop Success"))
-        legend_elements.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=2, label="Stop Error"))
+        outcome_handles.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=2, label="Stop Success"))
+        outcome_handles.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=2, label="Stop Error"))
     else:
-        legend_elements.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=2, label="Go Success"))
-        legend_elements.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=2, label="Go Error"))
-        legend_elements.append(Line2D([0], [0], color='k', ls=styles["M"]["ls"], lw=2, label="Go Miss"))
+        outcome_handles.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=2, label="Go Success"))
+        outcome_handles.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=2, label="Go Error"))
+        outcome_handles.append(Line2D([0], [0], color='k', ls=styles["M"]["ls"], lw=2, label="Go Miss"))
 
-    # Place Legend outside
-    axes[1].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.05, 0.5), 
-                   frameon=False, fontsize=style['legend_fontsize'])
+    # 3. Add First Legend (Rates) - Top Right
+    leg1 = axes[1].legend(
+        handles=rate_handles, 
+        title=r'$\bf{Stop\ Prior\ \tilde{r}^\nu}$',
+        loc='upper left', 
+        bbox_to_anchor=(1.05, 1.02),  # Position: Top aligned
+        frameon=False, 
+        fontsize=style['legend_fontsize'],
+        title_fontsize=style['legend_fontsize'] + 1
+    )
+    # Force Left Alignment of Title and Handles
+    leg1._legend_box.align = "left" 
+    
+    # Add leg1 to the plot so it persists when we add leg2
+    axes[1].add_artist(leg1)
+
+    # 4. Add Second Legend (Outcomes) - Below the first
+    leg2 = axes[1].legend(
+        handles=outcome_handles, 
+        title=r'$\bf{Outcome}$',
+        loc='upper left', 
+        bbox_to_anchor=(1.05, 0.45), # Position: Shifted down
+        frameon=False, 
+        fontsize=style['legend_fontsize'],
+        title_fontsize=style['legend_fontsize'] + 1
+    )
+    leg2._legend_box.align = "left"
 
     if saveto:
         fig.savefig(saveto, dpi=300, bbox_inches='tight')
