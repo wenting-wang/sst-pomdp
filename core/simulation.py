@@ -109,10 +109,6 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
     else:
         result = 'SS' if not ever_act else 'SE'
 
-    # --- Non-Decision Time ---
-    if rt is not None:
-        rt += model.ndt
-
     # --- Output ---
     if verbose:
         return {

@@ -14,7 +14,8 @@ BASE_DIR = Path('/kyb/agpd/wwang/data/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 # Inputs
-RECOVERY_CSV = Path("/kyb/agpd/wwang/data/res_833083/recovery_details.csv")
+# RECOVERY_CSV = Path("/kyb/agpd/wwang/data/res_833464/recovery_details.csv")
+RECOVERY_CSV = Path("/kyb/agpd/wwang/data/res_833489/recovery_details.csv")
 
 # Output
 OUTPUT_PLOT = OUT_DIR / "param_recovery_v2.png"
@@ -23,7 +24,6 @@ OUTPUT_PLOT = OUT_DIR / "param_recovery_v2.png"
 PARAMS = [
     "q_d_n", "q_d", "q_s_n", "q_s", 
     "cost_stop_error", "cost_time",
-    "ndt",
     "inv_temp",
 ]
 
@@ -34,7 +34,6 @@ PARAM_DISPLAY_NAMES = {
     'q_s': r"$\delta$",
     'cost_stop_error': r"$c_{\mathrm{se}}$",
     'cost_time': r"$c_t$",
-    "ndt": r"$ndt$",
     "inv_temp": r"$\varphi$",
 }
 

@@ -27,7 +27,6 @@ FIXED_PARAMS = {
     'cost_go_error': 1.0,
     'cost_go_missing': 1.0,
     'inv_temp': 50.0,
-    'ndt': 0,
     'rate_stop_trial': 1/6
 }
 
@@ -119,22 +118,22 @@ def main():
 
     # 5. Plotting
     print("Generating Plots...")
-    plotting.plot_simu_trial_batch_belief_5conditions(
-        out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'belief.png'
-    )
+    # plotting.plot_simu_trial_batch_belief_5conditions(
+    #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'belief.png'
+    # )
     
-    plotting.plot_simu_trial_batch_action_value_5conditions(
-        out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.png'
-    )
+    # plotting.plot_simu_trial_batch_action_value_5conditions(
+    #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.png'
+    # )
 
-    # plotting.plot_rate_timecourses(
-    #                             model=pomdp,
-    #                             params=params,
-    #                             rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-    #                             ssd=10,
-    #                             n_batch=1000, 
-    #                             trial_type="stop",
-    #                             saveto=OUT_DIR / "rate_timecourses_stop.png")
+    plotting.plot_rate_timecourses(
+                                model=pomdp,
+                                params=params,
+                                rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+                                ssd=10,
+                                n_batch=500, 
+                                trial_type="stop",
+                                saveto=OUT_DIR / "rate_timecourses_stop.png")
 
     # # NONSTOP trials (go-only), SSD ignored
     # plotting.plot_rate_timecourses(
@@ -142,7 +141,7 @@ def main():
     #                             params=params,
     #                             rates=(0.05, 1/6, 0.35, 0.55, 0.80),
     #                             ssd=None,
-    #                             n_batch=1000,
+    #                             n_batch=500,
     #                             trial_type="nonstop",
     #                             saveto=OUT_DIR /"rate_timecourses_go.png")
 
@@ -151,7 +150,7 @@ def main():
     #     params=params,
     #     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
     #     ssd=10,
-    #     n_session_trials=1000,
+    #     n_session_trials=500,
     #     saveto=OUT_DIR / "rate_behavior.png"
     # )
 

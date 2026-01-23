@@ -119,20 +119,19 @@ PARAM_RANGES = {
     "q_s_n": (0.0, 1.0),
     "q_s":   (0.5, 1.0),
     "cost_stop_error": (3e-5, 2.0),
-    "cost_time":       (1e-5, 0.1),
-    "ndt":            (0.0, 25.0)
+    "cost_time":       (3e-5, 0.003),
+    "inv_temp":     (1, 100)
     }
 
-LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s", "ndt"]
+LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s", "inv_temp"]
 LOG_PARAMS = ["cost_stop_error", "cost_time"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
 
 FIXED_PARAMS = {
     "cost_go_error":   1.0,
     "cost_go_missing": 1.0,
-    "rate_stop_trial": 1.0 / 6.0,
-    "inv_temp":      1.0
-}
+    "rate_stop_trial": 1.0 / 6.0
+    }
 
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
 
@@ -155,9 +154,6 @@ def simulate_data(params: Dict[str, float], seed: Optional[int] = None) -> pd.Da
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
-    
-    if 'ndt' in params:
-        params['ndt'] = int(round(params['ndt']))
     
     pomdp = POMDP(**params)
     pomdp.value_iteration_tensor()
@@ -261,7 +257,7 @@ class SinusoidalPE(nn.Module):
 class TrialTransformer(nn.Module):
     """Lightweight Transformer encoder + mean pooling."""
     def __init__(self, in_dim: int, model_dim: int = 64, nhead: int = 4, nlayers: int = 2,
-                 dropout: float = 0.1, out_dim: int = 32, use_pos_enc: bool = True):
+                 dropout: float = 0.1, out_dim: int = 64, use_pos_enc: bool = True):
         super().__init__()
         self.proj = nn.Linear(in_dim, model_dim)
         self.use_pos = use_pos_enc

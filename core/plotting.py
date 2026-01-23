@@ -69,7 +69,6 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
     
     # Standardize X-axis
     MAX_TIME_STEPS = 40
-    x_range_full = np.arange(1, MAX_TIME_STEPS + 1)
     xticks = [1, 10, 20, 30, 40]
 
     for i, df in enumerate(df_list):
@@ -694,302 +693,526 @@ def _summarize_behavior_with_sem(df, step_in_ms=25.0):
         rt_stop_err=rt_stop_err, rt_stop_err_sem=rt_stop_err_sem
     )
 
+# def plot_rate_timecourses(
+#     model,
+#     params: dict,
+#     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+#     ssd=None,
+#     n_batch=300,
+#     t_max=40,
+#     saveto=None,
+#     trial_type: str = "stop",   # "stop" or "nonstop"
+# ):
+#     """
+#     Across-rate within-trial dynamics.
+
+#     If trial_type == "stop":
+#         - Simulate stop trials with the given SSD (if None, default to 10).
+#         - Left: mean sigma_t (Stop belief), colored by stop-rate (darker = higher rate).
+#         - Right: gap Q(W) - min(Q(L), Q(R)), gray gradient, outcome styles SS(solid)/SE(dashed).
+#         - SSD markers (vertical) at ssd+1 and ssd+12+1 if ssd is not None.
+
+#     If trial_type == "nonstop":
+#         - Simulate go-only (nonstop) trials; SSD is ignored.
+#         - Left/Right panels as above; outcome styles GS(solid)/GE(dashed)/GM(dot-dash).
+#         - No SSD markers.
+
+#     Note:
+#         Color encodes the across-trial stop probability r~ even for nonstop,
+#         because it still shapes priors and value/belief dynamics.
+#     """
+#     import numpy as np
+#     from matplotlib.colors import to_rgb, rgb_to_hsv, hsv_to_rgb
+
+#     def desat_ramp(base="#7A1F2C", n=5, s_scale=0.55, v_low=0.42, v_high=0.88):
+#         b = np.array(to_rgb(base))
+#         h, s, v = rgb_to_hsv(b[np.newaxis, np.newaxis, :])[0, 0]
+#         s = np.clip(s * s_scale, 0, 1)
+#         vals = np.linspace(v_low, v_high, n)
+#         return [tuple(hsv_to_rgb([h, s, vv])) for vv in vals]
+
+#     def gray_ramp(n=5, g_low=0.18, g_high=0.70):
+#         return [(g, g, g) for g in np.linspace(g_high, g_low, n)]
+
+#     trial_type = str(trial_type).lower().strip()
+#     if trial_type not in ("stop", "nonstop"):
+#         raise ValueError("trial_type must be 'stop' or 'nonstop'.")
+
+#     # ---------- helpers ----------
+#     def _pad_to_matrix(seq_list, T):
+#         if len(seq_list) == 0:
+#             return np.full((0, T), np.nan)
+#         out = np.full((len(seq_list), T), np.nan)
+#         for i, s in enumerate(seq_list):
+#             if s is None:
+#                 continue
+#             arr = np.asarray(s, dtype=float)
+#             out[i, :min(len(arr), T)] = arr[:min(len(arr), T)]
+#         return out
+
+#     def _mean_sem(mat):
+#         mean = np.nanmean(mat, axis=0)
+#         n = np.sum(~np.isnan(mat), axis=0)
+#         std = np.nanstd(mat, axis=0, ddof=1)
+#         sem = np.where(n > 1, std / np.sqrt(n), np.nan)  # require n>1
+#         return mean, sem
+
+#     def _sigma_mean_sem(df):
+#         if len(df) == 0 or "sigma_seq" not in df.columns:
+#             return np.full(t_max, np.nan), np.full(t_max, np.nan)
+#         mat = _pad_to_matrix(df["sigma_seq"].tolist(), t_max)
+#         return _mean_sem(mat)
+
+#     def _gap_mean_sem(df):
+#         if len(df) == 0:
+#             return np.full(t_max, np.nan), np.full(t_max, np.nan)
+#         vl = _pad_to_matrix(df.get("value_left_seq", []).tolist(), t_max)
+#         vr = _pad_to_matrix(df.get("value_right_seq", []).tolist(), t_max)
+#         vw = _pad_to_matrix(df.get("value_wait_seq", []).tolist(), t_max)
+#         if vl.shape[0] == 0 or vr.shape[0] == 0 or vw.shape[0] == 0:
+#             return np.full(t_max, np.nan), np.full(t_max, np.nan)
+#         min_go = np.nanmin(np.stack([vl, vr], axis=0), axis=0)
+#         gap = vw - min_go
+#         return _mean_sem(gap)
+
+#     # ---------- simulate per rate ----------
+#     series = []
+#     for r in rates:
+#         current_params = params.copy()
+#         current_params['rate_stop_trial'] = float(r)
+
+#         m = model.__class__(**current_params)
+#         m.value_iteration_tensor()
+
+#         # A=success, B=error, M=miss (GM only)
+#         rec_a, rec_b, rec_m = [], [], []
+#         n_iter = int(n_batch)
+
+#         for _ in range(n_iter):
+#             true_go = np.random.choice(["left", "right"])
+
+#             if trial_type == "stop":
+#                 ssd_use = 10 if ssd is None else int(ssd)
+#                 res = simulation.simu_trial(m, true_go, "stop", ssd_use, verbose=True)
+#                 outcome = res["result"] if isinstance(res, dict) else (
+#                     res[0] if isinstance(res, (list, tuple)) else None)
+#                 if outcome == "SS":
+#                     rec_a.append(res)
+#                 elif outcome == "SE":
+#                     rec_b.append(res)
+#                 # no "SM" in stop trials; keep two buckets
+#             else:
+#                 res = simulation.simu_trial(m, true_go, "nonstop", None, verbose=True)
+#                 outcome = res["result"] if isinstance(res, dict) else (
+#                     res[0] if isinstance(res, (list, tuple)) else None)
+#                 if outcome == "GS":
+#                     rec_a.append(res)
+#                 elif outcome == "GE":
+#                     rec_b.append(res)
+#                 elif outcome == "GM":
+#                     rec_m.append(res)
+
+#         df_a, df_b, df_m = pd.DataFrame(
+#             rec_a), pd.DataFrame(rec_b), pd.DataFrame(rec_m)
+
+#         sigma_a_mean, sigma_a_sem = _sigma_mean_sem(df_a)
+#         sigma_b_mean, sigma_b_sem = _sigma_mean_sem(df_b)
+#         sigma_m_mean, sigma_m_sem = _sigma_mean_sem(df_m)
+
+#         gap_a_mean, gap_a_sem = _gap_mean_sem(df_a)
+#         gap_b_mean, gap_b_sem = _gap_mean_sem(df_b)
+#         gap_m_mean, gap_m_sem = _gap_mean_sem(df_m)
+
+#         series.append(dict(
+#             rate=float(r),
+#             sigma_a_mean=sigma_a_mean, sigma_a_sem=sigma_a_sem,
+#             sigma_b_mean=sigma_b_mean, sigma_b_sem=sigma_b_sem,
+#             sigma_m_mean=sigma_m_mean, sigma_m_sem=sigma_m_sem,
+#             gap_a_mean=gap_a_mean,   gap_a_sem=gap_a_sem,
+#             gap_b_mean=gap_b_mean,   gap_b_sem=gap_b_sem,
+#             gap_m_mean=gap_m_mean,   gap_m_sem=gap_m_sem
+#         ))
+
+#     # ---------- plotting ----------
+#     T = np.arange(1, t_max + 1)
+#     fig, axes = plt.subplots(1, 2, figsize=(
+#         12, 3.5), constrained_layout=True)
+#     lw = 1.5
+#     xticks = [1, max(1, t_max//4), max(1, t_max//2),
+#                 max(1, 3*t_max//4), t_max]
+
+#     for ax in axes:
+#         ax.spines['top'].set_visible(False)
+#         ax.spines['right'].set_visible(False)
+
+#     n_rates = len(series)
+#     sorted_rates = sorted(rates)
+#     rate_ranks = {r: i for i, r in enumerate(sorted_rates)}
+#     reds = desat_ramp("#7A1F2C", n_rates, s_scale=0.55,
+#                         v_low=0.42, v_high=0.88)[::-1]
+#     grays = gray_ramp(n_rates, g_low=0.18, g_high=0.70)
+
+#     if trial_type == "stop":
+#         style_a_lbl, style_b_lbl, style_m_lbl = "SS", "SE", None
+#     else:
+#         style_a_lbl, style_b_lbl, style_m_lbl = "GS", "GE", "GM"
+
+#     # ----- Left panel: sigma_t -----
+#     ax = axes[0]
+#     rate_lines = []
+#     for s in series:
+#         r = s["rate"]
+#         rank = rate_ranks[r]
+#         col = reds[rank]
+#         # lw = 2.2 - 0.6*rank/(n_rates-1)
+#         # al = 0.95 - 0.35*rank/(n_rates-1)
+#         lw = 1.5
+#         al = 0.18
+
+#         ax.plot(T, s["sigma_a_mean"], color=col, lw=lw, linestyle='-')
+#         ax.fill_between(T, s["sigma_a_mean"] - s["sigma_a_sem"],
+#                         s["sigma_a_mean"] + s["sigma_a_sem"], color=col, alpha=al)
+
+#         ax.plot(T, s["sigma_b_mean"], color=col, lw=lw, linestyle='--')
+#         ax.fill_between(T, s["sigma_b_mean"] - s["sigma_b_sem"],
+#                         s["sigma_b_mean"] + s["sigma_b_sem"], color=col, alpha=al)
+
+#         if trial_type == "nonstop":
+#             ax.plot(T, s["sigma_m_mean"], color=col, lw=lw, linestyle='-.')
+#             ax.fill_between(T, s["sigma_m_mean"] - s["sigma_m_sem"],
+#                             s["sigma_m_mean"] + s["sigma_m_sem"], color=col, alpha=al)
+
+#         rate_lines.append(
+#             Line2D([0], [0], color=col, lw=lw, label=f"{r:.2f}"))
+
+#     style_lines = [
+#         Line2D([0], [0], color='k', lw=lw,
+#                 linestyle='-',  label=style_a_lbl),
+#         Line2D([0], [0], color='k', lw=lw,
+#                 linestyle='--', label=style_b_lbl),
+#     ]
+#     if trial_type == "nonstop":
+#         style_lines.append(
+#             Line2D([0], [0], color='k', lw=lw, linestyle='-.', label=style_m_lbl))
+
+#     if trial_type == "stop" and ssd is not None:
+#         ax.axvline(x=int(ssd) + 1,      color='k',
+#                     linestyle='--', linewidth=1)
+#         ax.axvline(x=int(ssd) + 12 + 1, color='k',
+#                     linestyle='--', linewidth=1)
+
+#     legend_title = (
+#         "Stop Prob. " + r"$\tilde{r}^{\nu}$" + " (color)\n" +
+#         ("Outcome (style)" if trial_type == "nonstop" else "Outcome (style)")
+#     )
+
+#     leg = ax.legend(
+#         handles=rate_lines + style_lines,
+#         frameon=False,
+#         loc='upper left',
+#         bbox_to_anchor=(1.02, 1),
+#         title=legend_title,
+#         fontsize=12
+#     )
+#     leg.get_title().set_fontsize(12)
+
+#     ax.set_ylim(0, 1.1)
+#     ax.set_xlim(1, t_max)
+#     ax.set_xticks(xticks)
+#     ax.set_xlabel("Time Step", fontsize=12)
+#     ax.set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=12)
+
+#     # ----- Right panel: gap -----
+#     ax = axes[1]
+#     rate_lines = []
+#     for s in series:
+#         r = s["rate"]
+#         rank = rate_ranks[r]
+#         col = grays[rank]
+#         # lw = 2.2 - 0.6*rank/(n_rates-1)
+#         # al = 0.95 - 0.35*rank/(n_rates-1)
+#         lw = 1.5
+#         al = 0.18
+
+#         ax.plot(T, s["gap_a_mean"], color=col, lw=lw, linestyle='-')
+#         ax.fill_between(T, s["gap_a_mean"] - s["gap_a_sem"],
+#                         s["gap_a_mean"] + s["gap_a_sem"], color=col, alpha=al)
+
+#         ax.plot(T, s["gap_b_mean"], color=col, lw=lw, linestyle='--')
+#         ax.fill_between(T, s["gap_b_mean"] - s["gap_b_sem"],
+#                         s["gap_b_mean"] + s["gap_b_sem"], color=col, alpha=al)
+
+#         if trial_type == "nonstop":
+#             ax.plot(T, s["gap_m_mean"], color=col, lw=lw, linestyle='-.')
+#             ax.fill_between(T, s["gap_m_mean"] - s["gap_m_sem"],
+#                             s["gap_m_mean"] + s["gap_m_sem"], color=col, alpha=al)
+
+#         rate_lines.append(
+#             Line2D([0], [0], color=col, lw=lw, label=f"{r:.2f}"))
+
+#     style_lines = [
+#         Line2D([0], [0], color='k', lw=lw,
+#                 linestyle='-',  label=style_a_lbl),
+#         Line2D([0], [0], color='k', lw=lw,
+#                 linestyle='--', label=style_b_lbl),
+#     ]
+#     if trial_type == "nonstop":
+#         style_lines.append(
+#             Line2D([0], [0], color='k', lw=lw, linestyle='-.', label=style_m_lbl))
+
+#     if trial_type == "stop" and ssd is not None:
+#         ax.axvline(x=int(ssd) + 1,      color='k',
+#                     linestyle='--', linewidth=1)
+#         ax.axvline(x=int(ssd) + 12 + 1, color='k',
+#                     linestyle='--', linewidth=1)
+
+#     leg = ax.legend(
+#         handles=rate_lines + style_lines,
+#         frameon=False,
+#         loc='upper left',
+#         bbox_to_anchor=(1.02, 1),
+#         title=legend_title,
+#         fontsize=12
+#     )
+#     leg.get_title().set_fontsize(12)
+
+#     ax.set_xlim(1, t_max)
+#     ax.set_xticks(xticks)
+#     ax.set_xlabel("Time Step", fontsize=12)
+#     ax.set_ylabel(
+#         r"$Q^\nu_t(W) - \min(Q^\nu_t(L), Q^\nu_t(R))$", fontsize=12)
+
+#     plt.tight_layout()
+#     if saveto:
+#         fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.03)
+#         plt.show()
+#         plt.close(fig)
+#     else:
+#         plt.show()
+
 def plot_rate_timecourses(
     model,
     params: dict,
     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
     ssd=None,
-    n_batch=300,
-    t_max=40,
+    n_batch=500,
     saveto=None,
-    trial_type: str = "stop",   # "stop" or "nonstop"
+    trial_type: str = "stop",
+    t_max=40
 ):
     """
-    Across-rate within-trial dynamics.
-
-    If trial_type == "stop":
-        - Simulate stop trials with the given SSD (if None, default to 10).
-        - Left: mean sigma_t (Stop belief), colored by stop-rate (darker = higher rate).
-        - Right: gap Q(W) - min(Q(L), Q(R)), gray gradient, outcome styles SS(solid)/SE(dashed).
-        - SSD markers (vertical) at ssd+1 and ssd+12+1 if ssd is not None.
-
-    If trial_type == "nonstop":
-        - Simulate go-only (nonstop) trials; SSD is ignored.
-        - Left/Right panels as above; outcome styles GS(solid)/GE(dashed)/GM(dot-dash).
-        - No SSD markers.
-
-    Note:
-        Color encodes the across-trial stop probability r~ even for nonstop,
-        because it still shapes priors and value/belief dynamics.
+    Publication-quality visualization of Belief and Action Value dynamics.
+    Matches the style of plot_simu_trial_batch_belief_5conditions.
     """
-    import numpy as np
-    from matplotlib.colors import to_rgb, rgb_to_hsv, hsv_to_rgb
+    
+    # ==========================================
+    # 🎨 STYLE CONFIG
+    # ==========================================
+    style = {
+        "label_fontsize": 16,
+        "title_fontsize": 16,
+        "tick_fontsize": 14,
+        "legend_fontsize": 16,
+        "panel_label_size": 20,
+        "line_width_mean": 2,
+        "sem_alpha": 0.2,
+    }
 
-    def desat_ramp(base="#7A1F2C", n=5, s_scale=0.55, v_low=0.42, v_high=0.88):
-        b = np.array(to_rgb(base))
-        h, s, v = rgb_to_hsv(b[np.newaxis, np.newaxis, :])[0, 0]
-        s = np.clip(s * s_scale, 0, 1)
-        vals = np.linspace(v_low, v_high, n)
-        return [tuple(hsv_to_rgb([h, s, vv])) for vv in vals]
+    # Color Palette (Inferno Reversed) - Professional Gradient
+    # Dark Red -> Orange -> Yellow
+    cmap = plt.get_cmap('inferno') 
+    # Use range 0.2 to 0.85 to avoid indistinguishable blacks or invisible yellows
+    color_indices = np.linspace(0.3, 0.7, len(rates)) 
+    rate_colors = [cmap(i) for i in color_indices]
 
-    def gray_ramp(n=5, g_low=0.18, g_high=0.70):
-        return [(g, g, g) for g in np.linspace(g_high, g_low, n)]
+    styles = {
+        "A": {"ls": "-", "label": "Success"},      # Solid
+        "B": {"ls": "--", "label": "Error"},       # Dashed
+        "M": {"ls": ":", "label": "Miss"},         # Dotted
+    }
 
+    # ==========================================
+    # 1. SIMULATION LOOP
+    # ==========================================
     trial_type = str(trial_type).lower().strip()
-    if trial_type not in ("stop", "nonstop"):
-        raise ValueError("trial_type must be 'stop' or 'nonstop'.")
-
-    # ---------- helpers ----------
+    series = []
+    
     def _pad_to_matrix(seq_list, T):
-        if len(seq_list) == 0:
+        if not seq_list or len(seq_list) == 0:
             return np.full((0, T), np.nan)
         out = np.full((len(seq_list), T), np.nan)
         for i, s in enumerate(seq_list):
-            if s is None:
-                continue
+            if s is None: continue
             arr = np.asarray(s, dtype=float)
-            out[i, :min(len(arr), T)] = arr[:min(len(arr), T)]
+            limit = min(len(arr), T)
+            out[i, :limit] = arr[:limit]
         return out
 
     def _mean_sem(mat):
-        mean = np.nanmean(mat, axis=0)
-        n = np.sum(~np.isnan(mat), axis=0)
-        std = np.nanstd(mat, axis=0, ddof=1)
-        sem = np.where(n > 1, std / np.sqrt(n), np.nan)  # require n>1
+        if mat.shape[0] == 0:
+            return np.full(mat.shape[1], np.nan), np.full(mat.shape[1], np.nan)
+        with np.errstate(invalid='ignore'): 
+            mean = np.nanmean(mat, axis=0)
+            n = np.sum(~np.isnan(mat), axis=0)
+            std = np.nanstd(mat, axis=0, ddof=1)
+            sem = np.where(n > 1, std / np.sqrt(n), np.nan)
         return mean, sem
 
-    def _sigma_mean_sem(df):
-        if len(df) == 0 or "sigma_seq" not in df.columns:
-            return np.full(t_max, np.nan), np.full(t_max, np.nan)
-        mat = _pad_to_matrix(df["sigma_seq"].tolist(), t_max)
-        return _mean_sem(mat)
-
-    def _gap_mean_sem(df):
-        if len(df) == 0:
-            return np.full(t_max, np.nan), np.full(t_max, np.nan)
-        vl = _pad_to_matrix(df.get("value_left_seq", []).tolist(), t_max)
-        vr = _pad_to_matrix(df.get("value_right_seq", []).tolist(), t_max)
-        vw = _pad_to_matrix(df.get("value_wait_seq", []).tolist(), t_max)
-        if vl.shape[0] == 0 or vr.shape[0] == 0 or vw.shape[0] == 0:
-            return np.full(t_max, np.nan), np.full(t_max, np.nan)
-        min_go = np.nanmin(np.stack([vl, vr], axis=0), axis=0)
-        gap = vw - min_go
-        return _mean_sem(gap)
-
-    # ---------- simulate per rate ----------
-    series = []
-    for r in rates:
+    for r_idx, r in enumerate(rates):
         current_params = params.copy()
         current_params['rate_stop_trial'] = float(r)
-
+        
         m = model.__class__(**current_params)
         m.value_iteration_tensor()
 
-        # A=success, B=error, M=miss (GM only)
         rec_a, rec_b, rec_m = [], [], []
-        n_iter = int(n_batch)
-
-        for _ in range(n_iter):
+        
+        for _ in range(int(n_batch)):
             true_go = np.random.choice(["left", "right"])
-
+            
+            # --- CRITICAL: verbose=True to get sequences ---
             if trial_type == "stop":
                 ssd_use = 10 if ssd is None else int(ssd)
                 res = simulation.simu_trial(m, true_go, "stop", ssd_use, verbose=True)
-                outcome = res["result"] if isinstance(res, dict) else (
-                    res[0] if isinstance(res, (list, tuple)) else None)
-                if outcome == "SS":
-                    rec_a.append(res)
-                elif outcome == "SE":
-                    rec_b.append(res)
-                # no "SM" in stop trials; keep two buckets
+                outcome = res["result"] if isinstance(res, dict) else res[0]
+                if outcome == "SS": rec_a.append(res)
+                elif outcome == "SE": rec_b.append(res)
             else:
                 res = simulation.simu_trial(m, true_go, "nonstop", None, verbose=True)
-                outcome = res["result"] if isinstance(res, dict) else (
-                    res[0] if isinstance(res, (list, tuple)) else None)
-                if outcome == "GS":
-                    rec_a.append(res)
-                elif outcome == "GE":
-                    rec_b.append(res)
-                elif outcome == "GM":
-                    rec_m.append(res)
+                outcome = res["result"] if isinstance(res, dict) else res[0]
+                if outcome == "GS": rec_a.append(res)
+                elif outcome == "GE": rec_b.append(res)
+                elif outcome == "GM": rec_m.append(res)
 
-        df_a, df_b, df_m = pd.DataFrame(
-            rec_a), pd.DataFrame(rec_b), pd.DataFrame(rec_m)
+        data_packet = {"rate": r, "color": rate_colors[r_idx]}
+        
+        for cat, rec_list in zip(["A", "B", "M"], [rec_a, rec_b, rec_m]):
+            df = pd.DataFrame(rec_list)
+            
+            # 1. Belief (Sigma)
+            if "sigma_seq" in df.columns:
+                mat_sig = _pad_to_matrix(df["sigma_seq"].tolist(), t_max)
+                mu, se = _mean_sem(mat_sig)
+            else:
+                mu, se = np.full(t_max, np.nan), np.full(t_max, np.nan)
+            
+            data_packet[f"sigma_{cat}_mean"] = mu
+            data_packet[f"sigma_{cat}_sem"] = se
 
-        sigma_a_mean, sigma_a_sem = _sigma_mean_sem(df_a)
-        sigma_b_mean, sigma_b_sem = _sigma_mean_sem(df_b)
-        sigma_m_mean, sigma_m_sem = _sigma_mean_sem(df_m)
+            # 2. Value Gap
+            if "value_wait_seq" in df.columns:
+                vl = _pad_to_matrix(df["value_left_seq"].tolist(), t_max)
+                vr = _pad_to_matrix(df["value_right_seq"].tolist(), t_max)
+                vw = _pad_to_matrix(df["value_wait_seq"].tolist(), t_max)
 
-        gap_a_mean, gap_a_sem = _gap_mean_sem(df_a)
-        gap_b_mean, gap_b_sem = _gap_mean_sem(df_b)
-        gap_m_mean, gap_m_sem = _gap_mean_sem(df_m)
+                if vl.shape[0] > 0:
+                    min_go = np.nanmin(np.stack([vl, vr], axis=0), axis=0)
+                    gap = vw - min_go
+                    mu_g, se_g = _mean_sem(gap)
+                else:
+                    mu_g, se_g = np.full(t_max, np.nan), np.full(t_max, np.nan)
+            else:
+                mu_g, se_g = np.full(t_max, np.nan), np.full(t_max, np.nan)
+                
+            data_packet[f"gap_{cat}_mean"] = mu_g
+            data_packet[f"gap_{cat}_sem"] = se_g
 
-        series.append(dict(
-            rate=float(r),
-            sigma_a_mean=sigma_a_mean, sigma_a_sem=sigma_a_sem,
-            sigma_b_mean=sigma_b_mean, sigma_b_sem=sigma_b_sem,
-            sigma_m_mean=sigma_m_mean, sigma_m_sem=sigma_m_sem,
-            gap_a_mean=gap_a_mean,   gap_a_sem=gap_a_sem,
-            gap_b_mean=gap_b_mean,   gap_b_sem=gap_b_sem,
-            gap_m_mean=gap_m_mean,   gap_m_sem=gap_m_sem
-        ))
+        series.append(data_packet)
 
-    # ---------- plotting ----------
-    T = np.arange(1, t_max + 1)
-    fig, axes = plt.subplots(1, 2, figsize=(
-        12, 3.5), constrained_layout=True)
-    lw = 1.5
-    xticks = [1, max(1, t_max//4), max(1, t_max//2),
-                max(1, 3*t_max//4), t_max]
+    # ==========================================
+    # 2. PLOTTING
+    # ==========================================
+    fig, axes = plt.subplots(1, 2, figsize=(14*0.8, 6*0.8))
+    plt.subplots_adjust(wspace=0.3)
 
+    x_vals = np.arange(1, t_max + 1)
+    
+    # Standardized Ticks per request: 1, 10, 20, 30, 40
+    xticks_val = [1, 10, 20, 30, 40]
+    
+    ssd_lines = [ssd + 1, ssd + 12 + 1] if ssd else []
+
+    # Draw Lines
+    for i, s in enumerate(series):
+        col = s["color"]
+        for cat in ["A", "B", "M"]:
+            if trial_type == "stop" and cat == "M": continue
+            
+            sig_mu = s[f"sigma_{cat}_mean"]
+            sig_sem = s[f"sigma_{cat}_sem"]
+            gap_mu = s[f"gap_{cat}_mean"]
+            gap_sem = s[f"gap_{cat}_sem"]
+            
+            ls = styles[cat]["ls"]
+            
+            # Panel A: Belief
+            if not np.all(np.isnan(sig_mu)):
+                axes[0].plot(x_vals, sig_mu, color=col, linestyle=ls, lw=style['line_width_mean'])
+                axes[0].fill_between(x_vals, sig_mu - sig_sem, sig_mu + sig_sem,
+                                     color=col, alpha=style['sem_alpha'], lw=0)
+
+            # Panel B: Value Gap
+            if not np.all(np.isnan(gap_mu)):
+                axes[1].plot(x_vals, gap_mu, color=col, linestyle=ls, lw=style['line_width_mean'])
+                axes[1].fill_between(x_vals, gap_mu - gap_sem, gap_mu + gap_sem,
+                                     color=col, alpha=style['sem_alpha'], lw=0)
+
+    # Formatting
     for ax in axes:
+        ax.set_xlabel("Time Step", fontsize=style['label_fontsize'])
+        ax.set_xticks(xticks_val) # <--- Force 1, 10, 20, 30, 40
+        ax.tick_params(axis='both', labelsize=style['tick_fontsize'])
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
+        ax.set_xlim(x_vals[0], x_vals[-1])
+        
+        # SSD Markers
+        if trial_type == "stop" and ssd is not None:
+            for line_x in ssd_lines:
+                ax.axvline(x=line_x, color='k', linestyle='--', linewidth=1.2, alpha=0.8)
 
-    n_rates = len(series)
-    sorted_rates = sorted(rates)
-    rate_ranks = {r: i for i, r in enumerate(sorted_rates)}
-    reds = desat_ramp("#7A1F2C", n_rates, s_scale=0.55,
-                        v_low=0.42, v_high=0.88)[::-1]
-    grays = gray_ramp(n_rates, g_low=0.18, g_high=0.70)
+    axes[0].set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=style['label_fontsize'])
+    axes[1].set_ylabel(r"Value Gap $Q^\nu_t(W) - Q^\nu_t(Go)$", fontsize=style['label_fontsize'])
+    axes[0].set_ylim(0, 1.05)
 
+    # Panel Tags (A / B)
+    axes[0].text(-0.15, 1.05, "A", transform=axes[0].transAxes, 
+                 fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
+    axes[1].text(-0.15, 1.05, "B", transform=axes[1].transAxes, 
+                 fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
+
+    # Legend Construction
+    legend_elements = []
+    # Title for Rate Color
+    legend_elements.append(Line2D([0], [0], color='w', label=r'$\bf{Stop\ Prior\ \tilde{r}^\nu}$'))
+    for r, col in zip(rates, rate_colors):
+        legend_elements.append(Line2D([0], [0], color=col, lw=3, label=f"{r:.2f}"))
+    
+    # Spacer
+    legend_elements.append(Line2D([0], [0], color='w', label=' '))
+    
+    # Title for Outcome Style
+    legend_elements.append(Line2D([0], [0], color='w', label=r'$\bf{Outcome}$'))
+    
     if trial_type == "stop":
-        style_a_lbl, style_b_lbl, style_m_lbl = "SS", "SE", None
+        legend_elements.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=2, label="Stop Success"))
+        legend_elements.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=2, label="Stop Error"))
     else:
-        style_a_lbl, style_b_lbl, style_m_lbl = "GS", "GE", "GM"
+        legend_elements.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=2, label="Go Success"))
+        legend_elements.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=2, label="Go Error"))
+        legend_elements.append(Line2D([0], [0], color='k', ls=styles["M"]["ls"], lw=2, label="Go Miss"))
 
-    # ----- Left panel: sigma_t -----
-    ax = axes[0]
-    rate_lines = []
-    for s in series:
-        r = s["rate"]
-        rank = rate_ranks[r]
-        col = reds[rank]
-        # lw = 2.2 - 0.6*rank/(n_rates-1)
-        # al = 0.95 - 0.35*rank/(n_rates-1)
-        lw = 1.5
-        al = 0.18
+    # Place Legend outside
+    axes[1].legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.05, 0.5), 
+                   frameon=False, fontsize=style['legend_fontsize'])
 
-        ax.plot(T, s["sigma_a_mean"], color=col, lw=lw, linestyle='-')
-        ax.fill_between(T, s["sigma_a_mean"] - s["sigma_a_sem"],
-                        s["sigma_a_mean"] + s["sigma_a_sem"], color=col, alpha=al)
-
-        ax.plot(T, s["sigma_b_mean"], color=col, lw=lw, linestyle='--')
-        ax.fill_between(T, s["sigma_b_mean"] - s["sigma_b_sem"],
-                        s["sigma_b_mean"] + s["sigma_b_sem"], color=col, alpha=al)
-
-        if trial_type == "nonstop":
-            ax.plot(T, s["sigma_m_mean"], color=col, lw=lw, linestyle='-.')
-            ax.fill_between(T, s["sigma_m_mean"] - s["sigma_m_sem"],
-                            s["sigma_m_mean"] + s["sigma_m_sem"], color=col, alpha=al)
-
-        rate_lines.append(
-            Line2D([0], [0], color=col, lw=lw, label=f"{r:.2f}"))
-
-    style_lines = [
-        Line2D([0], [0], color='k', lw=lw,
-                linestyle='-',  label=style_a_lbl),
-        Line2D([0], [0], color='k', lw=lw,
-                linestyle='--', label=style_b_lbl),
-    ]
-    if trial_type == "nonstop":
-        style_lines.append(
-            Line2D([0], [0], color='k', lw=lw, linestyle='-.', label=style_m_lbl))
-
-    if trial_type == "stop" and ssd is not None:
-        ax.axvline(x=int(ssd) + 1,      color='k',
-                    linestyle='--', linewidth=1)
-        ax.axvline(x=int(ssd) + 12 + 1, color='k',
-                    linestyle='--', linewidth=1)
-
-    legend_title = (
-        "Stop Prob. " + r"$\tilde{r}^{\nu}$" + " (color)\n" +
-        ("Outcome (style)" if trial_type == "nonstop" else "Outcome (style)")
-    )
-
-    leg = ax.legend(
-        handles=rate_lines + style_lines,
-        frameon=False,
-        loc='upper left',
-        bbox_to_anchor=(1.02, 1),
-        title=legend_title,
-        fontsize=12
-    )
-    leg.get_title().set_fontsize(12)
-
-    ax.set_ylim(0, 1.1)
-    ax.set_xlim(1, t_max)
-    ax.set_xticks(xticks)
-    ax.set_xlabel("Time Step", fontsize=12)
-    ax.set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=12)
-
-    # ----- Right panel: gap -----
-    ax = axes[1]
-    rate_lines = []
-    for s in series:
-        r = s["rate"]
-        rank = rate_ranks[r]
-        col = grays[rank]
-        # lw = 2.2 - 0.6*rank/(n_rates-1)
-        # al = 0.95 - 0.35*rank/(n_rates-1)
-        lw = 1.5
-        al = 0.18
-
-        ax.plot(T, s["gap_a_mean"], color=col, lw=lw, linestyle='-')
-        ax.fill_between(T, s["gap_a_mean"] - s["gap_a_sem"],
-                        s["gap_a_mean"] + s["gap_a_sem"], color=col, alpha=al)
-
-        ax.plot(T, s["gap_b_mean"], color=col, lw=lw, linestyle='--')
-        ax.fill_between(T, s["gap_b_mean"] - s["gap_b_sem"],
-                        s["gap_b_mean"] + s["gap_b_sem"], color=col, alpha=al)
-
-        if trial_type == "nonstop":
-            ax.plot(T, s["gap_m_mean"], color=col, lw=lw, linestyle='-.')
-            ax.fill_between(T, s["gap_m_mean"] - s["gap_m_sem"],
-                            s["gap_m_mean"] + s["gap_m_sem"], color=col, alpha=al)
-
-        rate_lines.append(
-            Line2D([0], [0], color=col, lw=lw, label=f"{r:.2f}"))
-
-    style_lines = [
-        Line2D([0], [0], color='k', lw=lw,
-                linestyle='-',  label=style_a_lbl),
-        Line2D([0], [0], color='k', lw=lw,
-                linestyle='--', label=style_b_lbl),
-    ]
-    if trial_type == "nonstop":
-        style_lines.append(
-            Line2D([0], [0], color='k', lw=lw, linestyle='-.', label=style_m_lbl))
-
-    if trial_type == "stop" and ssd is not None:
-        ax.axvline(x=int(ssd) + 1,      color='k',
-                    linestyle='--', linewidth=1)
-        ax.axvline(x=int(ssd) + 12 + 1, color='k',
-                    linestyle='--', linewidth=1)
-
-    leg = ax.legend(
-        handles=rate_lines + style_lines,
-        frameon=False,
-        loc='upper left',
-        bbox_to_anchor=(1.02, 1),
-        title=legend_title,
-        fontsize=12
-    )
-    leg.get_title().set_fontsize(12)
-
-    ax.set_xlim(1, t_max)
-    ax.set_xticks(xticks)
-    ax.set_xlabel("Time Step", fontsize=12)
-    ax.set_ylabel(
-        r"$Q^\nu_t(W) - \min(Q^\nu_t(L), Q^\nu_t(R))$", fontsize=12)
-
-    plt.tight_layout()
     if saveto:
-        fig.savefig(saveto, dpi=300, bbox_inches='tight', pad_inches=0.03)
-        plt.show()
+        fig.savefig(saveto, dpi=300, bbox_inches='tight')
         plt.close(fig)
     else:
         plt.show()
+
+
 
 def plot_rate_behavior(
     model,
