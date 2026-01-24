@@ -1035,8 +1035,8 @@ def plot_composite_3x2(
     y_row3 = 0.03
     
     # X-Coordinates (Left Alignment)
-    x_text   = 0.06  # Where the text labels start (Left edge)
-    x_legend = 0.28  # Where the handles start (aligned vertically)
+    x_text   = 0.1  # Where the text labels start (Left edge)
+    x_legend = 0.3  # Where the handles start (aligned vertically)
 
     # --- ROW 1: Stop Prior ---
     fig.text(x_text, y_row1, "Stop Prior " + r"$\tilde{r}^\nu$", ha='left', va='center', 
