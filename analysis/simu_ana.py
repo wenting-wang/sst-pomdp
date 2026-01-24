@@ -146,7 +146,7 @@ def main():
 
 
 
-    plotting.plot_composite_2x3(
+    plotting.plot_composite_3x2(
     model=pomdp,
     params=params,
     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
