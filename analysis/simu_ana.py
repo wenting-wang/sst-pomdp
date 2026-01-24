@@ -126,14 +126,14 @@ def main():
     #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.png'
     # )
 
-    plotting.plot_stop_prior_belief(
-        model=pomdp,
-        params=params,
-        rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-        ssd=10,
-        n_batch=500,
-        saveto=OUT_DIR / "stop_prior_belief.png"
-    )
+    # plotting.plot_stop_prior_belief(
+    #     model=pomdp,
+    #     params=params,
+    #     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+    #     ssd=10,
+    #     n_batch=500,
+    #     saveto=OUT_DIR / "stop_prior_belief.png"
+    # )
 
     # plotting.plot_rate_behavior(
     #     model=pomdp,
@@ -143,6 +143,18 @@ def main():
     #     n_session_trials=500,
     #     saveto=OUT_DIR / "rate_behavior.png"
     # )
+
+
+
+    plotting.plot_composite_2x3(
+    model=pomdp,
+    params=params,
+    rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+    ssd=10,
+    n_batch=500,     # For timecourses
+    n_session=500,  # For behavior
+    saveto=OUT_DIR / "stop_prior_context.png",
+    )
 
     print("Done.")
 

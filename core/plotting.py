@@ -696,360 +696,764 @@ def _summarize_behavior_with_sem(df, step_in_ms=25.0):
 
 
 
-def plot_stop_prior_belief(
+# def plot_stop_prior_belief(
+#     model,
+#     params: dict,
+#     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+#     ssd=10,
+#     n_batch=500,
+#     saveto=None,
+#     t_max=40
+# ):
+#     """
+#     Generates a 4-panel figure (2x2) combining Stop and Nonstop trials.
+#     Row 1: Nonstop Trials (Belief, Value Gap)
+#     Row 2: Stop Trials (Belief, Value Gap)
+#     """
+    
+#     # ==========================================
+#     # 🎨 STYLE CONFIG
+#     # ==========================================
+#     style = {
+#         "label_fontsize": 16,
+#         "title_fontsize": 16,
+#         "tick_fontsize": 13,
+#         "legend_fontsize": 14,
+#         "panel_label_size": 20,
+#         "line_width_mean": 1.6,
+#         "sem_alpha": 0.2,
+#     }
+
+#     # --- CUSTOM COLOR PALETTE: "Journal Warm" ---
+#     custom_cmap = LinearSegmentedColormap.from_list("journal_warm", ["#F4A582", "#49000a"])
+#     color_indices = np.linspace(0.0, 1.0, len(rates)) 
+#     rate_colors = [custom_cmap(i) for i in color_indices]
+
+#     styles = {
+#         "A": {"ls": "-", "label": "Success"},      # Solid
+#         "B": {"ls": "--", "label": "Error"},       # Dashed
+#         "M": {"ls": ":", "label": "Miss"},         # Dotted
+#     }
+
+#     # ==========================================
+#     # 1. SIMULATION LOOP (Run both types per rate)
+#     # ==========================================
+#     data_stop = []
+#     data_go = []
+    
+#     # Helper to pad sequences
+#     def _pad_to_matrix(seq_list, T):
+#         if not seq_list or len(seq_list) == 0:
+#             return np.full((0, T), np.nan)
+#         out = np.full((len(seq_list), T), np.nan)
+#         for i, s in enumerate(seq_list):
+#             if s is None: continue
+#             arr = np.asarray(s, dtype=float)
+#             limit = min(len(arr), T)
+#             out[i, :limit] = arr[:limit]
+#         return out
+
+#     # Helper for Mean/SEM
+#     def _mean_sem(mat):
+#         if mat.shape[0] == 0:
+#             return np.full(mat.shape[1], np.nan), np.full(mat.shape[1], np.nan)
+#         with np.errstate(invalid='ignore'): 
+#             mean = np.nanmean(mat, axis=0)
+#             n = np.sum(~np.isnan(mat), axis=0)
+#             std = np.nanstd(mat, axis=0, ddof=1)
+#             sem = np.where(n > 1, std / np.sqrt(n), np.nan)
+#         return mean, sem
+
+#     # Helper to process a batch into plot stats
+#     def _process_batch(rec_list, outcome_map):
+#         stats = {}
+#         for cat_code, recs in outcome_map.items():
+#             df = pd.DataFrame(recs)
+#             # 1. Belief
+#             if "sigma_seq" in df.columns:
+#                 mat = _pad_to_matrix(df["sigma_seq"].tolist(), t_max)
+#                 stats[f"sigma_{cat_code}_mean"], stats[f"sigma_{cat_code}_sem"] = _mean_sem(mat)
+#             else:
+#                 stats[f"sigma_{cat_code}_mean"], stats[f"sigma_{cat_code}_sem"] = (np.full(t_max, np.nan), np.full(t_max, np.nan))
+            
+#             # 2. Value Gap
+#             if "value_wait_seq" in df.columns:
+#                 vl = _pad_to_matrix(df["value_left_seq"].tolist(), t_max)
+#                 vr = _pad_to_matrix(df["value_right_seq"].tolist(), t_max)
+#                 vw = _pad_to_matrix(df["value_wait_seq"].tolist(), t_max)
+#                 if vl.shape[0] > 0:
+#                     min_go = np.nanmin(np.stack([vl, vr], axis=0), axis=0)
+#                     gap = vw - min_go
+#                     stats[f"gap_{cat_code}_mean"], stats[f"gap_{cat_code}_sem"] = _mean_sem(gap)
+#                 else:
+#                     stats[f"gap_{cat_code}_mean"], stats[f"gap_{cat_code}_sem"] = (np.full(t_max, np.nan), np.full(t_max, np.nan))
+#             else:
+#                 stats[f"gap_{cat_code}_mean"], stats[f"gap_{cat_code}_sem"] = (np.full(t_max, np.nan), np.full(t_max, np.nan))
+#         return stats
+
+#     # --- Main Loop ---
+#     for r_idx, r in enumerate(rates):
+#         current_params = params.copy()
+#         current_params['rate_stop_trial'] = float(r)
+        
+#         # Init model once per rate
+#         m = model.__class__(**current_params)
+#         m.value_iteration_tensor()
+
+#         # Storage
+#         stop_a, stop_b = [], []      # SS, SE
+#         go_a, go_b, go_m = [], [], [] # GS, GE, GM
+
+#         # Run Batches
+#         for _ in range(int(n_batch)):
+#             true_go = np.random.choice(["left", "right"])
+            
+#             # 1. Stop Trial
+#             ssd_use = 10 if ssd is None else int(ssd)
+#             res_s = simulation.simu_trial(m, true_go, "stop", ssd_use, verbose=True)
+#             out_s = res_s["result"] if isinstance(res_s, dict) else res_s[0]
+#             if out_s == "SS": stop_a.append(res_s)
+#             elif out_s == "SE": stop_b.append(res_s)
+            
+#             # 2. Nonstop Trial
+#             res_g = simulation.simu_trial(m, true_go, "nonstop", None, verbose=True)
+#             out_g = res_g["result"] if isinstance(res_g, dict) else res_g[0]
+#             if out_g == "GS": go_a.append(res_g)
+#             elif out_g == "GE": go_b.append(res_g)
+#             elif out_g == "GM": go_m.append(res_g)
+
+#         # Process & Store
+#         # Stop Packet
+#         s_stats = _process_batch(None, {"A": stop_a, "B": stop_b})
+#         s_stats["rate"] = r
+#         s_stats["color"] = rate_colors[r_idx]
+#         data_stop.append(s_stats)
+
+#         # Go Packet
+#         g_stats = _process_batch(None, {"A": go_a, "B": go_b, "M": go_m})
+#         g_stats["rate"] = r
+#         g_stats["color"] = rate_colors[r_idx]
+#         data_go.append(g_stats)
+
+#     # ==========================================
+#     # 2. PLOTTING (2x2 Grid)
+#     # ==========================================
+#     fig, axes = plt.subplots(2, 2, figsize=(14, 11))
+#     plt.subplots_adjust(wspace=0.4, hspace=0.3)
+
+#     x_vals = np.arange(1, t_max + 1)
+#     xticks_val = [1, 10, 20, 30, 40]
+#     ssd_lines = [ssd + 1, ssd + 12 + 1] if ssd else []
+
+#     # Row 1: Go Trials (Data: data_go)
+#     # Row 2: Stop Trials (Data: data_stop)
+    
+#     rows_config = [
+#         {"data": data_go, "row_idx": 0, "cats": ["A", "B", "M"], "title_prefix": "Go Trial"},
+#         {"data": data_stop,   "row_idx": 1, "cats": ["A", "B"],      "title_prefix": "Stop Trial"}
+#     ]
+
+#     panel_tags = [["A", "B"], ["C", "D"]]
+
+#     for config in rows_config:
+#         row = config["row_idx"]
+#         dataset = config["data"]
+#         categories = config["cats"]
+        
+#         # Axes for this row
+#         ax_belief = axes[row, 0]
+#         ax_gap = axes[row, 1]
+
+#         # Plot Curves
+#         for s in dataset:
+#             col = s["color"]
+#             for cat in categories:
+#                 ls = styles[cat]["ls"]
+                
+#                 # Belief
+#                 mu = s[f"sigma_{cat}_mean"]
+#                 sem = s[f"sigma_{cat}_sem"]
+#                 if not np.all(np.isnan(mu)):
+#                     ax_belief.plot(x_vals, mu, color=col, linestyle=ls, lw=style['line_width_mean'])
+#                     ax_belief.fill_between(x_vals, mu - sem, mu + sem, color=col, alpha=style['sem_alpha'], lw=0)
+
+#                 # Gap
+#                 mu_g = s[f"gap_{cat}_mean"]
+#                 sem_g = s[f"gap_{cat}_sem"]
+#                 if not np.all(np.isnan(mu_g)):
+#                     ax_gap.plot(x_vals, mu_g, color=col, linestyle=ls, lw=style['line_width_mean'])
+#                     ax_gap.fill_between(x_vals, mu_g - sem_g, mu_g + sem_g, color=col, alpha=style['sem_alpha'], lw=0)
+
+#         # Formatting
+#         for col_idx, ax in enumerate([ax_belief, ax_gap]):
+#             ax.set_xticks(xticks_val)
+#             ax.set_xlim(1, t_max)
+#             ax.tick_params(labelsize=style['tick_fontsize'])
+#             ax.spines['top'].set_visible(False)
+#             ax.spines['right'].set_visible(False)
+            
+#             # X-Label only on bottom row? Or both?
+#             # Both is clearer for 2x2 usually, or just bottom. Let's do both for clarity.
+#             ax.set_xlabel("Time Step", fontsize=style['label_fontsize'])
+
+#             # SSD Lines (Only Row 0 usually, but check requirements)
+#             # Typically SSD is only relevant for Stop trials (Row 1)
+#             if row == 0 and ssd is not None:
+#                 for lx in ssd_lines:
+#                     ax.axvline(lx, color='k', linestyle='--', lw=1.2, alpha=0.8)
+
+#             # Panel Tags
+#             ax.text(-0.15, 1.05, panel_tags[row][col_idx], transform=ax.transAxes, 
+#                     fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
+
+#         # Y-Labels
+#         ax_belief.set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=style['label_fontsize'])
+#         ax_gap.set_ylabel(r"Value Gap $Q^\nu_t(W) - Q^\nu_t(Go)$", fontsize=style['label_fontsize'])
+#         ax_belief.set_ylim(0, 1.05)
+
+#         # Row Titles (Optional, but helps distinguish Stop vs Go rows)
+#         # ax_belief.set_title(f"{config['title_prefix']} - Belief", fontsize=style['title_fontsize'], loc='left')
+    
+#     # ==========================================
+#     # 3. LEGENDS (Right Side of Each Row)
+#     # ==========================================
+    
+#     # -- Legend Helper --
+#     def attach_legend(ax, trial_type_legend):
+#         # 1. Rate Handles
+#         rate_handles = [Line2D([0], [0], color=c, lw=1.6, label=f"{r:.2f}") for r, c in zip(rates, rate_colors)]
+        
+#         # 2. Outcome Handles
+#         outcome_handles = []
+#         if trial_type_legend == "stop":
+#             outcome_handles.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=1.6, label="Stop Success"))
+#             outcome_handles.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=1.6, label="Stop Error"))
+#         else:
+#             outcome_handles.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=1.6, label="Go Success"))
+#             outcome_handles.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=1.6, label="Go Error"))
+#             outcome_handles.append(Line2D([0], [0], color='k', ls=styles["M"]["ls"], lw=1.6, label="Go Miss"))
+
+#         # Add Rate Legend
+#         l1 = ax.legend(handles=rate_handles, title=r'Stop Prior $\tilde{r}^\nu$',
+#                        loc='upper left', bbox_to_anchor=(1.05, 1.02), frameon=False, 
+#                        fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+1)
+#         l1._legend_box.align = "left"
+#         ax.add_artist(l1)
+        
+#         # Add Outcome Legend
+#         l2 = ax.legend(handles=outcome_handles, title='Outcome',
+#                        loc='upper left', bbox_to_anchor=(1.05, 0.45), frameon=False, 
+#                        fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+1)
+#         l2._legend_box.align = "left"
+
+#     # Attach Legends to the Right-side plots (Column 1)
+#     attach_legend(axes[0, 1], "stop")
+#     attach_legend(axes[1, 1], "go")
+
+#     if saveto:
+#         fig.savefig(saveto, dpi=300, bbox_inches='tight')
+#         plt.close(fig)
+#     else:
+#         plt.show()
+
+
+
+# def plot_rate_behavior(
+#     model,
+#     params: dict,
+#     rates=(0.05, 0.10, 1/6, 0.30, 0.50),
+#     ssd=10,
+#     n_session_trials=1000,
+#     step_in_ms=25.0,
+#     saveto=None,
+#     rt_ylim_ms=(0, 1000),  # set None to auto-scale
+# ):
+#     """
+#     Two-panel behavioral summary across stop rates:
+#     Left: Accuracy (Go & Stop) with SEM
+#     Right: RT (Go-success & Stop-error) [ms] with SEM
+
+#     Styling: all black, mean±SEM, no top/right spines.
+#     """
+
+#     # --- simulate sessions at each rate ---
+#     rows = []
+#     for r in rates:
+#         m = model.__class__(rate_stop_trial=float(r), **params)
+#         m.value_iteration_tensor()
+#         df = _simulate_mixed_session(m, n_trials=n_session_trials, ssd=ssd)
+#         stats = _summarize_behavior_with_sem(df, step_in_ms=step_in_ms)
+#         rows.append(dict(rate=float(r), **stats))
+#     beh = pd.DataFrame(rows).sort_values("rate")
+
+#     # --- figure ---
+#     fig, axes = plt.subplots(1, 2, figsize=(
+#         12, 3.5), constrained_layout=True)
+#     for ax in axes:
+#         ax.spines["top"].set_visible(False)
+#         ax.spines["right"].set_visible(False)
+#         ax.tick_params(axis="both", which="both",
+#                         direction="out", length=3, width=0.9)
+
+#     # common kwargs
+#     k_go = dict(color="black", marker="o", linestyle="-",
+#                 linewidth=1.6, markersize=5, capsize=3)
+#     k_stop = dict(color="black", marker="o", linestyle="--",
+#                     linewidth=1.6, markersize=5, capsize=3)
+
+#     # ----- LEFT: Accuracy -----
+#     ax = axes[0]
+#     ax.errorbar(beh["rate"], beh["go_acc"],
+#                 yerr=beh["go_acc_sem"],   label="Go",   **k_go)
+#     ax.errorbar(beh["rate"], beh["stop_succ"],
+#                 yerr=beh["stop_succ_sem"], label="Stop", **k_stop)
+#     ax.set_xlabel(r"Stop Probability $\tilde{r}^{\nu}$", fontsize=12)
+#     ax.set_ylabel("Accuracy", fontsize=12)
+#     ax.set_ylim(0, 1.1)
+#     # ax.legend(frameon=False, ncol=2)
+#     ax.legend(
+#         frameon=False,
+#         ncol=1,
+#         loc='upper left',
+#         bbox_to_anchor=(1.02, 1.0)
+#     )
+
+#     # ----- RIGHT: RTs -----
+#     ax = axes[1]
+#     ax.errorbar(beh["rate"], beh["rt_go_succ"],
+#                 yerr=beh["rt_go_succ_sem"],  label="Go (Success)",  **k_go)
+#     ax.errorbar(beh["rate"], beh["rt_stop_err"],
+#                 yerr=beh["rt_stop_err_sem"], label="Stop (Error)", **k_stop)
+#     ax.set_xlabel(r"Stop Probability $\tilde{r}^{\nu}$", fontsize=12)
+#     ax.set_ylabel("Reaction Time (ms)", fontsize=12)
+#     if rt_ylim_ms is None:
+#         ymax = np.nanmax([beh["rt_go_succ"], beh["rt_stop_err"]]) * 1.1
+#         ax.set_ylim(0, max(600, float(ymax)))
+#     else:
+#         ax.set_ylim(*rt_ylim_ms)
+#     # ax.legend(frameon=False, ncol=1)
+#     ax.legend(
+#         frameon=False,
+#         ncol=1,
+#         loc='upper left',
+#         bbox_to_anchor=(1.02, 1.0)
+#     )
+
+#     # tidy
+#     for ax in axes:
+#         ax.margins(x=0.05)
+
+#     # save or show
+#     if saveto is not None:
+#         fig.canvas.draw()
+#         fig.savefig(saveto, dpi=300, bbox_inches="tight", pad_inches=0.02)
+#         plt.show()
+#         plt.close(fig)
+#     else:
+#         plt.show()
+
+#     return saveto, beh
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from matplotlib.colors import LinearSegmentedColormap
+from core import simulation
+
+def plot_composite_2x3(
     model,
     params: dict,
     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
     ssd=10,
-    n_batch=500,
+    n_batch=500,     
+    n_session=1000,  
     saveto=None,
     t_max=40
 ):
     """
-    Generates a 4-panel figure (2x2) combining Stop and Nonstop trials.
-    Row 1: Stop Trials (Belief, Value Gap)
-    Row 2: Nonstop Trials (Belief, Value Gap)
+    Revised 2x3 Composite Figure.
+    - Uses Truncated Means (Active Trials Only).
+    - Uses a dedicated Twin Axis for Survival Shadows.
+    - Simplifies shadow logic to rely on alpha accumulation.
     """
     
     # ==========================================
     # 🎨 STYLE CONFIG
     # ==========================================
     style = {
-        "label_fontsize": 16,
-        "title_fontsize": 16,
-        "tick_fontsize": 13,
-        "legend_fontsize": 14,
-        "panel_label_size": 20,
-        "line_width_mean": 1.6,
+        "label_fontsize": 18,
+        "tick_fontsize": 15,
+        "panel_label_size": 28, 
+        "line_width": 2.5,
+        "marker_size": 10,
         "sem_alpha": 0.2,
-    }
-
-    # --- CUSTOM COLOR PALETTE: "Journal Warm" ---
-    custom_cmap = LinearSegmentedColormap.from_list("journal_warm", ["#F4A582", "#49000a"])
-    color_indices = np.linspace(0.0, 1.0, len(rates)) 
-    rate_colors = [custom_cmap(i) for i in color_indices]
-
-    styles = {
-        "A": {"ls": "-", "label": "Success"},      # Solid
-        "B": {"ls": "--", "label": "Error"},       # Dashed
-        "M": {"ls": ":", "label": "Miss"},         # Dotted
-    }
-
-    # ==========================================
-    # 1. SIMULATION LOOP (Run both types per rate)
-    # ==========================================
-    data_stop = []
-    data_go = []
-    
-    # Helper to pad sequences
-    def _pad_to_matrix(seq_list, T):
-        if not seq_list or len(seq_list) == 0:
-            return np.full((0, T), np.nan)
-        out = np.full((len(seq_list), T), np.nan)
-        for i, s in enumerate(seq_list):
-            if s is None: continue
-            arr = np.asarray(s, dtype=float)
-            limit = min(len(arr), T)
-            out[i, :limit] = arr[:limit]
-        return out
-
-    # Helper for Mean/SEM
-    def _mean_sem(mat):
-        if mat.shape[0] == 0:
-            return np.full(mat.shape[1], np.nan), np.full(mat.shape[1], np.nan)
-        with np.errstate(invalid='ignore'): 
-            mean = np.nanmean(mat, axis=0)
-            n = np.sum(~np.isnan(mat), axis=0)
-            std = np.nanstd(mat, axis=0, ddof=1)
-            sem = np.where(n > 1, std / np.sqrt(n), np.nan)
-        return mean, sem
-
-    # Helper to process a batch into plot stats
-    def _process_batch(rec_list, outcome_map):
-        stats = {}
-        for cat_code, recs in outcome_map.items():
-            df = pd.DataFrame(recs)
-            # 1. Belief
-            if "sigma_seq" in df.columns:
-                mat = _pad_to_matrix(df["sigma_seq"].tolist(), t_max)
-                stats[f"sigma_{cat_code}_mean"], stats[f"sigma_{cat_code}_sem"] = _mean_sem(mat)
-            else:
-                stats[f"sigma_{cat_code}_mean"], stats[f"sigma_{cat_code}_sem"] = (np.full(t_max, np.nan), np.full(t_max, np.nan))
-            
-            # 2. Value Gap
-            if "value_wait_seq" in df.columns:
-                vl = _pad_to_matrix(df["value_left_seq"].tolist(), t_max)
-                vr = _pad_to_matrix(df["value_right_seq"].tolist(), t_max)
-                vw = _pad_to_matrix(df["value_wait_seq"].tolist(), t_max)
-                if vl.shape[0] > 0:
-                    min_go = np.nanmin(np.stack([vl, vr], axis=0), axis=0)
-                    gap = vw - min_go
-                    stats[f"gap_{cat_code}_mean"], stats[f"gap_{cat_code}_sem"] = _mean_sem(gap)
-                else:
-                    stats[f"gap_{cat_code}_mean"], stats[f"gap_{cat_code}_sem"] = (np.full(t_max, np.nan), np.full(t_max, np.nan))
-            else:
-                stats[f"gap_{cat_code}_mean"], stats[f"gap_{cat_code}_sem"] = (np.full(t_max, np.nan), np.full(t_max, np.nan))
-        return stats
-
-    # --- Main Loop ---
-    for r_idx, r in enumerate(rates):
-        current_params = params.copy()
-        current_params['rate_stop_trial'] = float(r)
+        "cap_size": 4,
+        "legend_fontsize": 15,
         
-        # Init model once per rate
-        m = model.__class__(**current_params)
+        # Shadow Settings
+        "shadow_alpha": 0.1,    # Single alpha for all layers; overlap = darker
+        "shadow_color": "gray"
+    }
+
+    color_acc = 'black'
+    color_rt  = '#006d77'
+    
+    cmap_warm = LinearSegmentedColormap.from_list("journal_warm", ["#C46254", "#49000a"])
+    rate_colors = [cmap_warm(i) for i in np.linspace(0.0, 1.0, len(rates))]
+
+    # ==========================================
+    # 1. HELPER: TRUNCATION LOGIC
+    # ==========================================
+    def _truncate_and_collect(seq_list):
+        if not seq_list: 
+            return np.full(t_max, np.nan), np.full(t_max, np.nan)
+        
+        df = pd.DataFrame(seq_list)
+        df = df.reindex(columns=range(t_max))
+        
+        with np.errstate(invalid='ignore'):
+            mu = df.mean(axis=0).to_numpy()
+            sd = df.std(axis=0, ddof=1).to_numpy()
+            count = df.count(axis=0).to_numpy()
+            se = np.where(count > 1, sd / np.sqrt(count), np.nan)
+        
+        return mu, se
+
+    # ==========================================
+    # 2. RUN SIMULATIONS
+    # ==========================================
+    beh_rows = []
+    timecourse_go = []
+    timecourse_stop = []
+
+    print("Simulating...")
+    for r_idx, r in enumerate(rates):
+        p = params.copy()
+        p['rate_stop_trial'] = float(r)
+        m = model.__class__(**p)
         m.value_iteration_tensor()
 
-        # Storage
-        stop_a, stop_b = [], []      # SS, SE
-        go_a, go_b, go_m = [], [], [] # GS, GE, GM
+        # --- A. Behavior Session ---
+        out_sess = []
+        for _ in range(n_session):
+            is_stop = np.random.rand() < float(r)
+            gs = np.random.choice(["left", "right"])
+            type_ = "stop" if is_stop else "nonstop"
+            ssd_ = ssd if is_stop else None
+            res = simulation.simu_trial(m, gs, type_, ssd_, verbose=False) 
+            out_sess.append(res)
+        
+        df_beh = pd.DataFrame(out_sess, columns=["result", "rt", "ssd"])
+        
+        # Stats for A & D
+        go_df = df_beh[df_beh["result"].isin(["GS", "GE", "GM"])]
+        if len(go_df) > 0:
+            go_acc = (go_df["result"]=="GS").mean()
+            go_acc_sem = np.sqrt(go_acc*(1-go_acc)/len(go_df))
+            gs_df = go_df[go_df["result"]=="GS"]
+            go_rt = gs_df["rt"].mean()*25 if len(gs_df)>0 else np.nan
+            go_rt_sem = gs_df["rt"].std(ddof=1)*25/np.sqrt(len(gs_df)) if len(gs_df)>0 else np.nan
+        else:
+            go_acc, go_acc_sem, go_rt, go_rt_sem = [np.nan]*4
 
-        # Run Batches
-        for _ in range(int(n_batch)):
+        stop_df = df_beh[df_beh["result"].isin(["SS", "SE"])]
+        if len(stop_df) > 0:
+            stop_acc = (stop_df["result"]=="SS").mean()
+            stop_acc_sem = np.sqrt(stop_acc*(1-stop_acc)/len(stop_df))
+            se_df = stop_df[stop_df["result"]=="SE"]
+            stop_rt = se_df["rt"].mean()*25 if len(se_df)>0 else np.nan 
+            stop_rt_sem = se_df["rt"].std(ddof=1)*25/np.sqrt(len(se_df)) if len(se_df)>0 else np.nan
+        else:
+            stop_acc, stop_acc_sem, stop_rt, stop_rt_sem = [np.nan]*4
+
+        beh_rows.append({
+            "rate": r,
+            "go_acc": go_acc, "go_acc_sem": go_acc_sem, 
+            "go_rt": go_rt, "go_rt_sem": go_rt_sem,
+            "stop_acc": stop_acc, "stop_acc_sem": stop_acc_sem, 
+            "stop_rt": stop_rt, "stop_rt_sem": stop_rt_sem
+        })
+
+        # --- B. Timecourse Batches ---
+        g_data = {"GS": {"sig": [], "gap": [], "rt": []}, 
+                  "GE": {"sig": [], "gap": [], "rt": []}, 
+                  "GM": {"sig": [], "gap": [], "rt": []}}
+        
+        s_data = {"SS": {"sig": [], "gap": [], "rt": []}, 
+                  "SE": {"sig": [], "gap": [], "rt": []}}
+
+        def process_trial_result(res, store_dict):
+            out_type = res["result"]
+            if out_type not in store_dict: return
+
+            policy_seq = res["policy_seq"]
+            decision_idx = len(policy_seq) - 1
+            for t_idx, act in enumerate(policy_seq):
+                if act != 2: # 2 is WAIT
+                    decision_idx = t_idx
+                    break
+            
+            limit = decision_idx + 1
+            
+            # Truncate sequences
+            sigma_seq = np.array(res["sigma_seq"])[:limit]
+            
+            vw = np.array(res["value_wait_seq"])[:limit]
+            vl = np.array(res["value_left_seq"])[:limit]
+            vr = np.array(res["value_right_seq"])[:limit]
+            
+            if len(vl) > 0:
+                min_go = np.minimum(vl, vr)
+                gap_seq = vw - min_go
+            else:
+                gap_seq = []
+
+            store_dict[out_type]["sig"].append(sigma_seq)
+            store_dict[out_type]["gap"].append(gap_seq)
+            store_dict[out_type]["rt"].append(decision_idx)
+
+        for _ in range(n_batch):
             true_go = np.random.choice(["left", "right"])
             
-            # 1. Stop Trial
-            ssd_use = 10 if ssd is None else int(ssd)
-            res_s = simulation.simu_trial(m, true_go, "stop", ssd_use, verbose=True)
-            out_s = res_s["result"] if isinstance(res_s, dict) else res_s[0]
-            if out_s == "SS": stop_a.append(res_s)
-            elif out_s == "SE": stop_b.append(res_s)
-            
-            # 2. Nonstop Trial
+            # Go Trial
             res_g = simulation.simu_trial(m, true_go, "nonstop", None, verbose=True)
-            out_g = res_g["result"] if isinstance(res_g, dict) else res_g[0]
-            if out_g == "GS": go_a.append(res_g)
-            elif out_g == "GE": go_b.append(res_g)
-            elif out_g == "GM": go_m.append(res_g)
+            process_trial_result(res_g, g_data)
 
-        # Process & Store
-        # Stop Packet
-        s_stats = _process_batch(None, {"A": stop_a, "B": stop_b})
-        s_stats["rate"] = r
-        s_stats["color"] = rate_colors[r_idx]
-        data_stop.append(s_stats)
+            # Stop Trial
+            res_s = simulation.simu_trial(m, true_go, "stop", ssd, verbose=True)
+            process_trial_result(res_s, s_data)
 
-        # Go Packet
-        g_stats = _process_batch(None, {"A": go_a, "B": go_b, "M": go_m})
-        g_stats["rate"] = r
-        g_stats["color"] = rate_colors[r_idx]
-        data_go.append(g_stats)
+        # Aggregate
+        pkt_g = {"rate": r, "color": rate_colors[r_idx], "rts": {k: v["rt"] for k,v in g_data.items()}}
+        for cat in ["GS", "GE", "GM"]:
+            pkt_g[f"sigma_{cat}_mu"], pkt_g[f"sigma_{cat}_sem"] = _truncate_and_collect(g_data[cat]["sig"])
+            pkt_g[f"gap_{cat}_mu"],   pkt_g[f"gap_{cat}_sem"]   = _truncate_and_collect(g_data[cat]["gap"])
+        timecourse_go.append(pkt_g)
+
+        pkt_s = {"rate": r, "color": rate_colors[r_idx], "rts": {k: v["rt"] for k,v in s_data.items()}}
+        for cat in ["SS", "SE"]:
+            pkt_s[f"sigma_{cat}_mu"], pkt_s[f"sigma_{cat}_sem"] = _truncate_and_collect(s_data[cat]["sig"])
+            pkt_s[f"gap_{cat}_mu"],   pkt_s[f"gap_{cat}_sem"]   = _truncate_and_collect(s_data[cat]["gap"])
+        timecourse_stop.append(pkt_s)
+
+    df_beh_summary = pd.DataFrame(beh_rows)
 
     # ==========================================
-    # 2. PLOTTING (2x2 Grid)
+    # 3. PLOTTING
     # ==========================================
-    fig, axes = plt.subplots(2, 2, figsize=(14, 11))
-    plt.subplots_adjust(wspace=0.4, hspace=0.3)
-
-    x_vals = np.arange(1, t_max + 1)
-    xticks_val = [1, 10, 20, 30, 40]
-    ssd_lines = [ssd + 1, ssd + 12 + 1] if ssd else []
-
-    # Row 1: Stop Trials (Data: data_stop)
-    # Row 2: Go Trials (Data: data_go)
+    fig = plt.figure(figsize=(22, 12)) 
     
-    rows_config = [
-        {"data": data_stop, "row_idx": 0, "cats": ["A", "B"],      "title_prefix": "Stop Trial"},
-        {"data": data_go,   "row_idx": 1, "cats": ["A", "B", "M"], "title_prefix": "Go Trial"}
-    ]
+    gs_main = fig.add_gridspec(1, 2, width_ratios=[1, 2.3], wspace=0.3) 
+    gs_left = gs_main[0].subgridspec(2, 1, hspace=0.3)
+    gs_right = gs_main[1].subgridspec(2, 2, wspace=0.3, hspace=0.3)
 
-    panel_tags = [["A", "B"], ["C", "D"]]
+    ax_go_beh   = fig.add_subplot(gs_left[0])
+    ax_stop_beh = fig.add_subplot(gs_left[1])
+    
+    ax_go_bel   = fig.add_subplot(gs_right[0, 0])
+    ax_go_gap   = fig.add_subplot(gs_right[0, 1])
+    ax_stop_bel = fig.add_subplot(gs_right[1, 0])
+    ax_stop_gap = fig.add_subplot(gs_right[1, 1])
 
-    for config in rows_config:
-        row = config["row_idx"]
-        dataset = config["data"]
-        categories = config["cats"]
+    axes_time = [ax_go_bel, ax_go_gap, ax_stop_bel, ax_stop_gap]
+    x_time = np.arange(1, t_max+1)
+
+    # -----------------------------
+    # 3.1 SETUP SHADOW AXES (TwinX)
+    # -----------------------------
+    # This dictionary will hold the 'shadow' axis for each main axis
+    shadow_axes = {}
+    
+    for ax in axes_time:
+        # Create Twin Axis for Survival
+        ax_shad = ax.twinx()
         
-        # Axes for this row
-        ax_belief = axes[row, 0]
-        ax_gap = axes[row, 1]
+        # Style it to be hidden/background
+        ax_shad.set_ylim(0, 1.05)
+        ax_shad.set_yticks([]) # Hide ticks
+        for sp in ax_shad.spines.values(): sp.set_visible(False)
+        
+        # Z-Order Trick: Shadow Axis at 0, Main Axis at 1
+        ax_shad.set_zorder(0)
+        ax.set_zorder(1)
+        ax.patch.set_visible(False) # Make main axis transparent so we see shadow below
+        
+        shadow_axes[ax] = ax_shad
 
-        # Plot Curves
-        for s in dataset:
-            col = s["color"]
-            for cat in categories:
-                ls = styles[cat]["ls"]
+    # -----------------------------
+    # 3.2 PLOT SHADOWS
+    # -----------------------------
+    def draw_shadow(target_ax, rt_list):
+        if not rt_list or len(rt_list) == 0: return
+        try:
+            valid_rts = np.sort([int(float(r)) + 1 for r in rt_list])
+        except: return
+
+        n = len(valid_rts)
+        if n == 0: return
+
+        y = 1.0 - np.arange(1, n + 1) / n
+        x_plot = np.concatenate(([1], valid_rts))
+        y_plot = np.concatenate(([1.0], y))
+        
+        target_ax.fill_between(x_plot, y_plot, step='post', 
+                               color=style['shadow_color'], 
+                               alpha=style['shadow_alpha'], 
+                               linewidth=0)
+
+    # Use Middle Rate
+    mid_idx = len(rates) // 2
+    rts_go = timecourse_go[mid_idx]["rts"]
+    rts_stop = timecourse_stop[mid_idx]["rts"]
+    
+    # Go: Plot all (GM, GS, GE) on the shadow axis
+    for cat in ["GM", "GS", "GE"]:
+        draw_shadow(shadow_axes[ax_go_bel], rts_go.get(cat, []))
+        draw_shadow(shadow_axes[ax_go_gap], rts_go.get(cat, []))
+    
+    # Stop: Plot all (SS, SE) on the shadow axis
+    for cat in ["SS", "SE"]:
+        draw_shadow(shadow_axes[ax_stop_bel], rts_stop.get(cat, []))
+        draw_shadow(shadow_axes[ax_stop_gap], rts_stop.get(cat, []))
+
+    # -----------------------------
+    # 3.3 PLOT TRUNCATED CURVES (Main Axis)
+    # -----------------------------
+    def plot_tc(ax, dataset, metric_prefix, outcome_keys, styles_map):
+        for d in dataset:
+            col = d["color"]
+            for out_key in outcome_keys:
+                mu = d[f"{metric_prefix}_{out_key}_mu"]
+                se = d[f"{metric_prefix}_{out_key}_sem"]
+                ls = styles_map[out_key]["ls"]
                 
-                # Belief
-                mu = s[f"sigma_{cat}_mean"]
-                sem = s[f"sigma_{cat}_sem"]
-                if not np.all(np.isnan(mu)):
-                    ax_belief.plot(x_vals, mu, color=col, linestyle=ls, lw=style['line_width_mean'])
-                    ax_belief.fill_between(x_vals, mu - sem, mu + sem, color=col, alpha=style['sem_alpha'], lw=0)
+                mask = ~np.isnan(mu)
+                if np.any(mask):
+                    ax.plot(x_time[mask], mu[mask], color=col, ls=ls, lw=2)
+                    ax.fill_between(x_time[mask], mu[mask]-se[mask], mu[mask]+se[mask], 
+                                    color=col, alpha=0.2, lw=0)
 
-                # Gap
-                mu_g = s[f"gap_{cat}_mean"]
-                sem_g = s[f"gap_{cat}_sem"]
-                if not np.all(np.isnan(mu_g)):
-                    ax_gap.plot(x_vals, mu_g, color=col, linestyle=ls, lw=style['line_width_mean'])
-                    ax_gap.fill_between(x_vals, mu_g - sem_g, mu_g + sem_g, color=col, alpha=style['sem_alpha'], lw=0)
+    st_map = {
+        "GS": {"ls": "-"}, "GE": {"ls": "--"}, "GM": {"ls": ":"},
+        "SS": {"ls": "-"}, "SE": {"ls": "--"}
+    }
 
-        # Formatting
-        for col_idx, ax in enumerate([ax_belief, ax_gap]):
-            ax.set_xticks(xticks_val)
-            ax.set_xlim(1, t_max)
-            ax.tick_params(labelsize=style['tick_fontsize'])
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
+    plot_tc(ax_go_bel, timecourse_go, "sigma", ["GS", "GE", "GM"], st_map)
+    plot_tc(ax_go_gap, timecourse_go, "gap",   ["GS", "GE", "GM"], st_map)
+    plot_tc(ax_stop_bel, timecourse_stop, "sigma", ["SS", "SE"], st_map)
+    plot_tc(ax_stop_gap, timecourse_stop, "gap",   ["SS", "SE"], st_map)
+
+    # -----------------------------
+    # 3.4 BEHAVIOR PANELS (A & D)
+    # -----------------------------
+    def plot_behavior_panel(ax, df, acc_key, acc_sem_key, rt_key, rt_sem_key, rt_label, acc_label):
+            l1 = ax.errorbar(df["rate"], df[acc_key], yerr=df[acc_sem_key],
+                        color=color_acc, linestyle='-', marker='o', 
+                        markersize=style['marker_size'], lw=style['line_width'], 
+                        capsize=style['cap_size'], label=acc_label)
             
-            # X-Label only on bottom row? Or both?
-            # Both is clearer for 2x2 usually, or just bottom. Let's do both for clarity.
-            ax.set_xlabel("Time Step", fontsize=style['label_fontsize'])
+            ax.set_ylabel("Accuracy", color=color_acc, fontsize=style['label_fontsize'])
+            ax.tick_params(axis='y', labelcolor=color_acc)
+            ax.set_ylim(0, 1.05)
 
-            # SSD Lines (Only Row 0 usually, but check requirements)
-            # Typically SSD is only relevant for Stop trials (Row 0)
-            if row == 0 and ssd is not None:
-                for lx in ssd_lines:
-                    ax.axvline(lx, color='k', linestyle='--', lw=1.2, alpha=0.8)
+            axR = ax.twinx()
+            l2 = axR.errorbar(df["rate"], df[rt_key], yerr=df[rt_sem_key],
+                        color=color_rt, linestyle='-', marker='s', 
+                        markersize=style['marker_size'], lw=style['line_width'], 
+                        capsize=style['cap_size'], label=rt_label)
+            
+            axR.set_ylabel("RT (ms)", color=color_rt, fontsize=style['label_fontsize'])
+            axR.tick_params(axis='y', labelcolor=color_rt)
+            
+            ax.legend([l1, l2], [acc_label, rt_label], loc='lower right', 
+                    frameon=False, fontsize=style['tick_fontsize'])
+            return axR
 
-            # Panel Tags
-            ax.text(-0.15, 1.05, panel_tags[row][col_idx], transform=ax.transAxes, 
-                    fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
+    axR_go = plot_behavior_panel(ax_go_beh, df_beh_summary, 
+                                 "go_acc", "go_acc_sem", 
+                                 "go_rt", "go_rt_sem", "Go Success RT", "Go Accuracy")
 
-        # Y-Labels
-        ax_belief.set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=style['label_fontsize'])
-        ax_gap.set_ylabel(r"Value Gap $Q^\nu_t(W) - Q^\nu_t(Go)$", fontsize=style['label_fontsize'])
-        ax_belief.set_ylim(0, 1.05)
+    axR_stop = plot_behavior_panel(ax_stop_beh, df_beh_summary, 
+                                   "stop_acc", "stop_acc_sem", 
+                                   "stop_rt", "stop_rt_sem", "Stop Error RT", "Stop Accuracy")
 
-        # Row Titles (Optional, but helps distinguish Stop vs Go rows)
-        # ax_belief.set_title(f"{config['title_prefix']} - Belief", fontsize=style['title_fontsize'], loc='left')
+    # -----------------------------
+    # FORMATTING & LEGENDS
+    # -----------------------------
+    for ax in [ax_go_beh, ax_stop_beh]:
+        ax.set_xlabel(r"Stop Prior $\tilde{r}^\nu$", fontsize=style['label_fontsize'])
+        ax.spines['top'].set_visible(False)
+        axR = ax.get_shared_x_axes().get_siblings(ax)[0] 
+        axR.spines['top'].set_visible(False)
+        ax.tick_params(axis='both', labelsize=style['tick_fontsize'])
+        axR.tick_params(axis='both', labelsize=style['tick_fontsize'])
+
+    for ax in axes_time:
+        ax.set_xlabel("Time Step", fontsize=style['label_fontsize'])
+        ax.set_xticks([1, 10, 20, 30, 40])
+        ax.set_xlim(1, 40)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.tick_params(axis='both', labelsize=style['tick_fontsize'])
     
-    # ==========================================
-    # 3. LEGENDS (Right Side of Each Row)
-    # ==========================================
+    ax_go_bel.set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=style['label_fontsize'])
+    ax_stop_bel.set_ylabel(r"Belief State $\sigma^\nu_t$", fontsize=style['label_fontsize'])
     
-    # -- Legend Helper --
-    def attach_legend(ax, trial_type_legend):
-        # 1. Rate Handles
-        rate_handles = [Line2D([0], [0], color=c, lw=1.6, label=f"{r:.2f}") for r, c in zip(rates, rate_colors)]
-        
-        # 2. Outcome Handles
-        outcome_handles = []
-        if trial_type_legend == "stop":
-            outcome_handles.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=1.6, label="Stop Success"))
-            outcome_handles.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=1.6, label="Stop Error"))
-        else:
-            outcome_handles.append(Line2D([0], [0], color='k', ls=styles["A"]["ls"], lw=1.6, label="Go Success"))
-            outcome_handles.append(Line2D([0], [0], color='k', ls=styles["B"]["ls"], lw=1.6, label="Go Error"))
-            outcome_handles.append(Line2D([0], [0], color='k', ls=styles["M"]["ls"], lw=1.6, label="Go Miss"))
+    label_gap = r"$Q_t^{\nu}(W) - \min(Q_t^{\nu}(L), Q_t^{\nu}(R))$"
+    ax_go_gap.set_ylabel(label_gap, fontsize=style['label_fontsize'])
+    ax_stop_gap.set_ylabel(label_gap, fontsize=style['label_fontsize'])
+    
+    if ssd:
+        for ax in [ax_stop_bel, ax_stop_gap]:
+            ax.axvline(ssd+1, color='k', ls='--', alpha=0.8)
+            ax.axvline(ssd+12+1, color='k', ls='--', alpha=0.8)
 
-        # Add Rate Legend
-        l1 = ax.legend(handles=rate_handles, title=r'Stop Prior $\tilde{r}^\nu$',
-                       loc='upper left', bbox_to_anchor=(1.05, 1.02), frameon=False, 
-                       fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+1)
-        l1._legend_box.align = "left"
-        ax.add_artist(l1)
-        
-        # Add Outcome Legend
-        l2 = ax.legend(handles=outcome_handles, title='Outcome',
-                       loc='upper left', bbox_to_anchor=(1.05, 0.45), frameon=False, 
-                       fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+1)
-        l2._legend_box.align = "left"
+    # LEGENDS
+    rate_handles = [Line2D([0],[0], color=c, lw=3, label=f"{r:.2f}") for r,c in zip(rates, rate_colors)]
+    out_handles_go  = [
+        Line2D([0],[0], color='k', ls='-', label='Go Success'),
+        Line2D([0],[0], color='k', ls='--', label='Go Error'),
+        Line2D([0],[0], color='k', ls=':', label='Go Missing')
+    ]
+    out_handles_stop  = [
+        Line2D([0],[0], color='k', ls='-', label='Stop Success'),
+        Line2D([0],[0], color='k', ls='--', label='Stop Error')
+    ]
+    
+    # Use 3x alpha for legend to represent the accumulated ink look
+    shadow_handle = Patch(facecolor=style['shadow_color'], alpha=style['shadow_alpha']*3, label='Response Distribution')
+    
+    l1 = ax_go_gap.legend(handles=rate_handles, title=r"Stop Prior $\tilde{r}^\nu$", 
+                     bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False, 
+                     fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
+    l1._legend_box.align = "left"
+    ax_go_gap.add_artist(l1)
+    
+    l2 = ax_go_gap.legend(handles=out_handles_go + [shadow_handle], title="Outcome", 
+                     bbox_to_anchor=(1.05, 0.45), loc='upper left', frameon=False,
+                       fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
+    l2._legend_box.align = "left"
 
-    # Attach Legends to the Right-side plots (Column 1)
-    attach_legend(axes[0, 1], "stop")
-    attach_legend(axes[1, 1], "go")
+    l3 = ax_stop_gap.legend(handles=rate_handles, title=r"Stop Prior $\tilde{r}^\nu$", 
+                       bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False, 
+                       fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
+    l3._legend_box.align = "left"
+    ax_stop_gap.add_artist(l3)
+    
+    l4 = ax_stop_gap.legend(handles=out_handles_stop + [shadow_handle], title="Outcome", 
+                       bbox_to_anchor=(1.05, 0.45), loc='upper left', frameon=False,
+                       fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
+    l4._legend_box.align = "left"
+
+    for ax, label in zip([ax_go_beh, ax_go_bel, ax_go_gap, ax_stop_beh, ax_stop_bel, ax_stop_gap], 
+                         ["A", "B", "C", "D", "E", "F"]):
+        ax.text(-0.15, 1.1, label, transform=ax.transAxes, 
+                fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
 
     if saveto:
         fig.savefig(saveto, dpi=300, bbox_inches='tight')
         plt.close(fig)
     else:
         plt.show()
-
-
-
-def plot_rate_behavior(
-    model,
-    params: dict,
-    rates=(0.05, 0.10, 1/6, 0.30, 0.50),
-    ssd=10,
-    n_session_trials=1000,
-    step_in_ms=25.0,
-    saveto=None,
-    rt_ylim_ms=(0, 1000),  # set None to auto-scale
-):
-    """
-    Two-panel behavioral summary across stop rates:
-    Left: Accuracy (Go & Stop) with SEM
-    Right: RT (Go-success & Stop-error) [ms] with SEM
-
-    Styling: all black, mean±SEM, no top/right spines.
-    """
-
-    # --- simulate sessions at each rate ---
-    rows = []
-    for r in rates:
-        m = model.__class__(rate_stop_trial=float(r), **params)
-        m.value_iteration_tensor()
-        df = _simulate_mixed_session(m, n_trials=n_session_trials, ssd=ssd)
-        stats = _summarize_behavior_with_sem(df, step_in_ms=step_in_ms)
-        rows.append(dict(rate=float(r), **stats))
-    beh = pd.DataFrame(rows).sort_values("rate")
-
-    # --- figure ---
-    fig, axes = plt.subplots(1, 2, figsize=(
-        12, 3.5), constrained_layout=True)
-    for ax in axes:
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.tick_params(axis="both", which="both",
-                        direction="out", length=3, width=0.9)
-
-    # common kwargs
-    k_go = dict(color="black", marker="o", linestyle="-",
-                linewidth=1.6, markersize=5, capsize=3)
-    k_stop = dict(color="black", marker="o", linestyle="--",
-                    linewidth=1.6, markersize=5, capsize=3)
-
-    # ----- LEFT: Accuracy -----
-    ax = axes[0]
-    ax.errorbar(beh["rate"], beh["go_acc"],
-                yerr=beh["go_acc_sem"],   label="Go",   **k_go)
-    ax.errorbar(beh["rate"], beh["stop_succ"],
-                yerr=beh["stop_succ_sem"], label="Stop", **k_stop)
-    ax.set_xlabel(r"Stop Probability $\tilde{r}^{\nu}$", fontsize=12)
-    ax.set_ylabel("Accuracy", fontsize=12)
-    ax.set_ylim(0, 1.1)
-    # ax.legend(frameon=False, ncol=2)
-    ax.legend(
-        frameon=False,
-        ncol=1,
-        loc='upper left',
-        bbox_to_anchor=(1.02, 1.0)
-    )
-
-    # ----- RIGHT: RTs -----
-    ax = axes[1]
-    ax.errorbar(beh["rate"], beh["rt_go_succ"],
-                yerr=beh["rt_go_succ_sem"],  label="Go (Success)",  **k_go)
-    ax.errorbar(beh["rate"], beh["rt_stop_err"],
-                yerr=beh["rt_stop_err_sem"], label="Stop (Error)", **k_stop)
-    ax.set_xlabel(r"Stop Probability $\tilde{r}^{\nu}$", fontsize=12)
-    ax.set_ylabel("Reaction Time (ms)", fontsize=12)
-    if rt_ylim_ms is None:
-        ymax = np.nanmax([beh["rt_go_succ"], beh["rt_stop_err"]]) * 1.1
-        ax.set_ylim(0, max(600, float(ymax)))
-    else:
-        ax.set_ylim(*rt_ylim_ms)
-    # ax.legend(frameon=False, ncol=1)
-    ax.legend(
-        frameon=False,
-        ncol=1,
-        loc='upper left',
-        bbox_to_anchor=(1.02, 1.0)
-    )
-
-    # tidy
-    for ax in axes:
-        ax.margins(x=0.05)
-
-    # save or show
-    if saveto is not None:
-        fig.canvas.draw()
-        fig.savefig(saveto, dpi=300, bbox_inches="tight", pad_inches=0.02)
-        plt.show()
-        plt.close(fig)
-    else:
-        plt.show()
-
-    return saveto, beh
