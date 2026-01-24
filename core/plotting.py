@@ -962,12 +962,11 @@ def plot_composite_3x2(
 
     plot_behavior_panel(ax_go_beh, df_beh_summary, 
                         "go_acc", "go_acc_sem", 
-                        "go_rt", "go_rt_sem", "Go RT", "Go Acc")
+                        "go_rt", "go_rt_sem", "Go RT", "Go Acc.")
 
     plot_behavior_panel(ax_stop_beh, df_beh_summary, 
                         "stop_acc", "stop_acc_sem", 
-                        "stop_rt", "stop_rt_sem", "Stop RT", "Stop Acc")
-
+                        "stop_rt", "stop_rt_sem", "Stop RT", "Stop Acc.")
     # -----------------------------
     # FORMATTING
     # -----------------------------
