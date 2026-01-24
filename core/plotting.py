@@ -724,13 +724,13 @@ def plot_composite_2x3(
     # ==========================================
     style = {
         "label_fontsize": 18,
-        "tick_fontsize": 15,
+        "tick_fontsize": 16,
         "panel_label_size": 28, 
         "line_width": 2.5,
         "marker_size": 10,
         "sem_alpha": 0.2,
         "cap_size": 4,
-        "legend_fontsize": 15,
+        "legend_fontsize": 16,
         
         # Shadow Settings
         "shadow_alpha": 0.1,    # Accumulates to create darker overlaps
@@ -738,7 +738,7 @@ def plot_composite_2x3(
     }
 
     color_acc = 'black'
-    color_rt  = '#006d77'
+    color_rt  = '#08519c'
     
     cmap_warm = LinearSegmentedColormap.from_list("journal_warm", ["#C46254", "#49000a"])
     rate_colors = [cmap_warm(i) for i in np.linspace(0.0, 1.0, len(rates))]
@@ -1069,24 +1069,24 @@ def plot_composite_2x3(
     shadow_handle = Patch(facecolor=style['shadow_color'], alpha=style['shadow_alpha']*3, label='Survival Prob.')
     
     l1 = ax_go_gap.legend(handles=rate_handles, title=r"Stop Prior $\tilde{r}^\nu$", 
-                     bbox_to_anchor=(1.2, 1), loc='upper left', frameon=False, 
+                     bbox_to_anchor=(1.18, 1), loc='upper left', frameon=False, 
                      fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
     l1._legend_box.align = "left"
     ax_go_gap.add_artist(l1)
     
     l2 = ax_go_gap.legend(handles=out_handles_go + [shadow_handle], title="Outcome", 
-                     bbox_to_anchor=(1.2, 0.45), loc='upper left', frameon=False,
+                     bbox_to_anchor=(1.18, 0.45), loc='upper left', frameon=False,
                        fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
     l2._legend_box.align = "left"
 
     l3 = ax_stop_gap.legend(handles=rate_handles, title=r"Stop Prior $\tilde{r}^\nu$", 
-                       bbox_to_anchor=(1.2, 1), loc='upper left', frameon=False, 
+                       bbox_to_anchor=(1.18, 1), loc='upper left', frameon=False, 
                        fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
     l3._legend_box.align = "left"
     ax_stop_gap.add_artist(l3)
     
     l4 = ax_stop_gap.legend(handles=out_handles_stop + [shadow_handle], title="Outcome", 
-                       bbox_to_anchor=(1.2, 0.45), loc='upper left', frameon=False,
+                       bbox_to_anchor=(1.18, 0.45), loc='upper left', frameon=False,
                        fontsize=style['legend_fontsize'], title_fontsize=style['legend_fontsize']+2)
     l4._legend_box.align = "left"
 
