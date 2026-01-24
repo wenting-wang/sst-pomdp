@@ -737,8 +737,8 @@ def plot_composite_2x3(
         "shadow_color": "gray"
     }
 
-    color_acc = 'black'
-    color_rt  = '#08519c'
+    color_acc = '#0d2b45'
+    color_rt  = '#3c6e96'
     
     cmap_warm = LinearSegmentedColormap.from_list("journal_warm", ["#C46254", "#49000a"])
     rate_colors = [cmap_warm(i) for i in np.linspace(0.0, 1.0, len(rates))]
