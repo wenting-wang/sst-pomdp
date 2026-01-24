@@ -126,24 +126,14 @@ def main():
     #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.png'
     # )
 
-    plotting.plot_rate_timecourses(
-                                model=pomdp,
-                                params=params,
-                                rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-                                ssd=10,
-                                n_batch=500, 
-                                trial_type="stop",
-                                saveto=OUT_DIR / "rate_timecourses_stop.png")
-
-    # # NONSTOP trials (go-only), SSD ignored
-    # plotting.plot_rate_timecourses(
-    #                             model=pomdp,
-    #                             params=params,
-    #                             rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-    #                             ssd=None,
-    #                             n_batch=500,
-    #                             trial_type="nonstop",
-    #                             saveto=OUT_DIR /"rate_timecourses_go.png")
+    plotting.plot_stop_prior_belief(
+        model=pomdp,
+        params=params,
+        rates=(0.05, 1/6, 0.35, 0.55, 0.80),
+        ssd=10,
+        n_batch=500,
+        saveto=OUT_DIR / "stop_prior_belief.png"
+    )
 
     # plotting.plot_rate_behavior(
     #     model=pomdp,
