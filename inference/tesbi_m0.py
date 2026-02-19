@@ -1,59 +1,10 @@
-"""
-pipeline_transformer_snpe.py 
-(run on HPC cluster using run_pipeline.sh)
+import sys
+import pandas as pd
+from pathlib import Path
 
-End-to-end SBI with a Transformer-based summary for the POMDP-SST simulator.
-
-Workflow:
-1) Round-1: Simulate pairs of (omega, trials).
-2) Pretrain: Train a small Transformer encoder to map trials -> embedding.
-3) Freeze Encoder: Generate embeddings and fit a z-score standardizer.
-4) Train SNPE: Train Neural Spline Flow (NSF) posterior on (omega, embedding_z).
-5) Round-2 (Active Learning): Sample from proposal, simulate, and retrain.
-6) Inference: Condition on observed data to sample the posterior.
-
-================================================================================
-USAGE EXAMPLES
-================================================================================
-HPC (recommended for full runs):
-
-    Use run_tesbi.sh on an HPC cluster with SLURM to execute the full pipeline.
-
-================================================================================
-Local Testing (not recommended for full runs):
-
---- A. SMOKE TEST (Fast Debugging) ---
-Use these commands to verify the pipeline works without waiting hours.
-
-# 1. Pretrain Encoder (Quick: 500 sims, 2 epochs)
-python tesbi.py --stage pretrain --n1_pre 500 --epochs 2
-
-# 2. Train SNPE (Light: MAF density, small N)
-python tesbi.py --stage snpe --n1_pre 500 --n2 200 --density maf
-
-# 3. Recovery Check (5 test cases)
-python tesbi.py --stage recover --K 5 --num_post 500
-
---- B. REAL RUN (Production) ---
-Use these commands for final analysis. WARNING: Heavy computation.
-
-# 1. Pretrain Encoder (Deep: 30k sims, 8 epochs)
-python tesbi.py --stage pretrain --n1_pre 30000 --epochs 8
-
-# 2. Train SNPE (Heavy: NSF density, 50k total sims)
-python tesbi.py --stage snpe --n1_pre 30000 --n2 20000 --density nsf
-
-# 3. Full Recovery Sweep (200 test cases)
-python tesbi.py --stage recover --K 200 --num_post 4000
-
-# 4. Inference on Real Data (All subjects)
-python tesbi.py --stage posterior \
-  --sst_folder "/home/wwang/data/sst_valid_base" \
-  --glob_pat "NDAR_*.csv.zip" \
-  --num_samples 10000
-
-================================================================================
-"""
+# Fix path to allow importing 'model'
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir.parent))
 
 import os
 import math
@@ -62,12 +13,13 @@ import pickle
 import argparse
 import warnings
 import glob
+import multiprocessing
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Optional, Callable
 from pathlib import Path
+from joblib import Parallel, delayed
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -77,10 +29,30 @@ from sbi.utils import BoxUniform
 
 # Local modules
 from utils.preprocessing import preprocessing
-from core.models import M0_Baseline 
+from core.models import M0_Baseline
 from core import simulation
 
+# --- CPU Device Setup ---
+try:
+    # SLURM Allocated CPUs
+    N_JOBS = int(os.environ.get("SLURM_CPUS_PER_TASK"))
+except (ValueError, TypeError):
+    # Default to all available CPUs locally
+    N_JOBS = multiprocessing.cpu_count()
 
+print(f"  [Auto-Config] Detected {N_JOBS} CPU cores available for joblib.")
+
+# --- GPU Device Setup ---
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+print("-" * 60)
+print(f"Running on device: {str(device).upper()}")
+if device.type == 'cuda':
+    print(f"GPU Name:          {torch.cuda.get_device_name(0)}")
+    print(f"GPU Memory:        {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+else:
+    print("WARNING: Running on CPU. This will be slow!")
+print("-" * 60)
 
 # --- Configuration ---
 
@@ -90,20 +62,20 @@ PARAM_RANGES = {
     "q_d":   (0.5, 1.0),
     # "q_s_n": (0.0, 1.0),
     "q_s":   (0.5, 1.0),
-    "cost_stop_error": (3e-5, 2.0),
-    "cost_time":       (3e-5, 0.003),
-}
+    "cost_stop_error": (0.01, 2.0),
+    # "inv_temp":     (1, 100)
+    }
 
-# LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s"]
 LINEAR_PARAMS = ["q_d", "q_s"]
-LOG_PARAMS = ["cost_stop_error", "cost_time"]
+LOG_PARAMS = ["cost_stop_error"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
 
 FIXED_PARAMS = {
+    "cost_time": 0.001,
     "cost_go_error":   1.0,
     "cost_go_missing": 1.0,
-    # "inv_temp":        50.0,
-}
+    "rate_stop_trial": 1.0 / 6.0
+    }
 
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
 
@@ -120,17 +92,14 @@ POST_SUMMARY_CSV = ART_DIR / "posterior_summary.csv"
 
 # --- 1. Simulator Wrapper ---
 
-def simulate_data(params: Dict[str, float], rate_stop_trial=1/6, seed: Optional[int] = None) -> pd.DataFrame:
-    """Runs the POMDP simulator for a single parameter set."""
+def simulate_data(params: Dict[str, float], seed: Optional[int] = None) -> pd.DataFrame:
+    """Runs the m0 simulator for a single parameter set."""
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
     
-    run_params = params.copy()
-    run_params['rate_stop_trial'] = float(rate_stop_trial)
-
-    m0 = M0_Baseline(**run_params)
+    m0 = M0_Baseline(**params)
     m0.value_iteration_tensor()
     arr = simulation.simu_task(m0)
     return pd.DataFrame(arr, columns=["result", "rt", "ssd"])
@@ -148,8 +117,8 @@ def make_box_prior() -> Tuple[BoxUniform, torch.Tensor, torch.Tensor]:
         low.append(lo)
         high.append(hi)
     
-    low = torch.tensor(low, dtype=torch.float32)
-    high = torch.tensor(high, dtype=torch.float32)
+    low = torch.tensor(low, dtype=torch.float32).to(device)
+    high = torch.tensor(high, dtype=torch.float32).to(device)
     prior = BoxUniform(low=low, high=high)
     return prior, low, high
 
@@ -232,7 +201,7 @@ class SinusoidalPE(nn.Module):
 class TrialTransformer(nn.Module):
     """Lightweight Transformer encoder + mean pooling."""
     def __init__(self, in_dim: int, model_dim: int = 64, nhead: int = 4, nlayers: int = 2,
-                 dropout: float = 0.1, out_dim: int = 32, use_pos_enc: bool = True):
+                 dropout: float = 0.1, out_dim: int = 64, use_pos_enc: bool = True):
         super().__init__()
         self.proj = nn.Linear(in_dim, model_dim)
         self.use_pos = use_pos_enc
@@ -270,41 +239,110 @@ class OmegaDataset(Dataset):
 
 
 def train_encoder_on_simulations(X_list, omega_list, in_dim, omega_dim, 
-                                 epochs=5, batch_size=64, lr=1e-3, seed=137):
-    """Supervised regression: Trials -> Embedding -> Predicted Omega."""
-    torch.manual_seed(seed)
+                                 epochs=50, batch_size=128, lr=1e-3, seed=137,
+                                 patience=10):
+    # --- Batch Size ---
+    n_gpu = torch.cuda.device_count()
+    if n_gpu > 1:
+        print(f"  [Auto-Scale] Detected {n_gpu} GPUs!")
+        print(f"   Batch size scaled from {batch_size} -> {batch_size * n_gpu}")
+        batch_size = batch_size * n_gpu
     
-    encoder = TrialTransformer(in_dim, out_dim=64, use_pos_enc=True)
-    reg_head = nn.Sequential(nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, omega_dim))
+    # 1. Split & Scale Data
+    torch.manual_seed(seed); np.random.seed(seed)
+    total_len = len(X_list)
+    val_len = int(0.2 * total_len)
+    train_len = total_len - val_len
+    
+    perm = np.random.permutation(total_len)
+    train_idx, val_idx = perm[:train_len], perm[train_len:]
+    
+    X_train = [X_list[i] for i in train_idx]
+    X_val =   [X_list[i] for i in val_idx]
+    
+    # Normalize Targets
+    Y_all = np.stack(omega_list, axis=0).astype(np.float32)
+    y_mean = Y_all[train_idx].mean(axis=0, keepdims=True)
+    y_std = Y_all[train_idx].std(axis=0, keepdims=True)
+    y_std[y_std < 1e-6] = 1.0 
+    
+    def scale_y(indices):
+        return [(Y_all[i] - y_mean[0]) / y_std[0] for i in indices]
 
+    # Dataloaders (pin_memory=True for GPU)
+    train_ds = OmegaDataset(X_train, scale_y(train_idx))
+    val_ds   = OmegaDataset(X_val,   scale_y(val_idx))
+    
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
+    val_dl   = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+
+    # 2. Model Setup (Move to DEVICE)
+    encoder = TrialTransformer(in_dim, out_dim=64, use_pos_enc=True).to(device)
+    if n_gpu > 1:
+        encoder = nn.DataParallel(encoder) # All visible GPUs
+    reg_head = nn.Sequential(nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, omega_dim)).to(device)
+    
     params = list(encoder.parameters()) + list(reg_head.parameters())
-    opt = torch.optim.AdamW(params, lr=lr, weight_decay=1e-4)
+    opt = torch.optim.AdamW(params, lr=lr)
     loss_fn = nn.MSELoss()
 
-    # Normalize targets
-    Y = np.stack(omega_list, axis=0).astype(np.float32)
-    y_mean = Y.mean(axis=0, keepdims=True)
-    y_std = Y.std(axis=0, keepdims=True)
-    y_std[y_std == 0.0] = 1.0
-    omega_scaled = [(Y[i] - y_mean[0]) / y_std[0] for i in range(len(Y))]
+    # 3. Training Loop
+    best_val_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
 
-    ds = OmegaDataset(X_list, omega_scaled)
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
+    print(f"\n [Encoder] Training on {device}...")
 
-    encoder.train(); reg_head.train()
-    print(f"[Encoder] Starting pretraining for {epochs} epochs...")
-    
     for ep in range(epochs):
-        total_loss = 0.0
-        for Xb, Yb in dl:
+        # -- Train --
+        encoder.train(); reg_head.train()
+        train_loss = 0.0
+        for Xb, Yb in train_dl:
+            Xb, Yb = Xb.to(device), Yb.to(device) # <--- Move to GPU
             pred = reg_head(encoder(Xb))
             loss = loss_fn(pred, Yb)
             opt.zero_grad(); loss.backward(); opt.step()
-            total_loss += loss.item() * Xb.size(0)
-        print(f"[Encoder] Epoch {ep+1}/{epochs} MSE={total_loss/len(ds):.4f}")
+            train_loss += loss.item() * Xb.size(0)
+        train_loss /= len(train_ds)
 
-    # Freeze encoder
-    for p in encoder.parameters(): p.requires_grad = False
+        # -- Validate --
+        encoder.eval(); reg_head.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for Xb, Yb in val_dl:
+                Xb, Yb = Xb.to(device), Yb.to(device) # <--- Move to GPU
+                pred = reg_head(encoder(Xb))
+                loss = loss_fn(pred, Yb)
+                val_loss += loss.item() * Xb.size(0)
+        val_loss /= len(val_ds)
+        
+        print(f"Epoch {ep+1:03d} | Val MSE: {val_loss:.4f}", end="")
+
+        # -- Early Stopping --
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            raw_encoder = encoder.module if isinstance(encoder, nn.DataParallel) else encoder
+            best_model_state = {
+                'enc': {k: v.cpu().clone() for k, v in raw_encoder.state_dict().items()},
+                'head': {k: v.cpu().clone() for k, v in reg_head.state_dict().items()}
+            }            
+            print(" *")
+        else:
+            patience_counter += 1
+            print(f" (Wait {patience_counter})")
+            if patience_counter >= patience:
+                print("Early stopping.")
+                break
+    
+    # Restore
+    if isinstance(encoder, nn.DataParallel):
+        encoder = encoder.module
+        
+    if best_model_state:
+        encoder.load_state_dict(best_model_state['enc'])
+        reg_head.load_state_dict(best_model_state['head'])
+    
     encoder.eval()
     return encoder, reg_head
 
@@ -318,88 +356,146 @@ class SummaryStandardizer:
     def transform(self, X): return (X - self.mean_) / self.std_
     def fit_transform(self, X): return self.fit(X).transform(X)
 
+def worker_simulate(i, omega, seed_offset=0):
+    params = untransform(omega)
+    df = simulate_data(params, seed=seed_offset + i)
+    return build_per_trial_features(df)
+
 
 # --- 6. Pipeline Stages ---
 
-@dataclass
-class SimBlock:
-    omegas: torch.Tensor
-    embeds: np.ndarray
-
-def simulate_round(prior_sampler, N, encoder, seed_offset=0):
-    omegas = prior_sampler((N,))
-    embeds = []
-    for i in range(N):
-        params = untransform(omegas[i])
-        df = simulate_data(params, seed=seed_offset + i)
-        X = build_per_trial_features(df)
-        with torch.no_grad():
-            z = encoder(torch.tensor(X[None, ...], dtype=torch.float32))
-        embeds.append(z.squeeze(0).numpy())
-    return SimBlock(omegas=omegas, embeds=np.vstack(embeds))
-
-
 def run_pretrain(args, prior, D):
-    print(f"[Pretrain] Simulating {args.n1_pre} pairs...")
-    omegas = prior.sample((args.n1_pre,))
-    X_list, Omega_list = [], []
+    print(f"\n [Pretrain] Simulating {args.n1_pre} pairs...")
+    omegas = prior.sample((args.n1_pre,)).cpu()
     
-    for i in range(args.n1_pre):
-        params = untransform(omegas[i])
-        df = simulate_data(params, seed=i)
-        X_list.append(build_per_trial_features(df))
-        Omega_list.append(omegas[i].numpy())
-    
+    print(f"Launching Stage 1 parallel simulation...")
+    X_list = Parallel(n_jobs=N_JOBS, verbose=1)(
+        delayed(worker_simulate)(i, omegas[i]) for i in range(args.n1_pre)
+    )
+    Omega_list = [omegas[i].numpy() for i in range(args.n1_pre)]
     encoder, _ = train_encoder_on_simulations(
         X_list, Omega_list, in_dim=X_list[0].shape[1], omega_dim=D,
-        epochs=args.epochs
+        epochs=args.epochs, patience=args.patience
     )
     torch.save(encoder.state_dict(), ENC_PATH)
     print(f"[Pretrain] Encoder saved to {ENC_PATH}")
 
 
+@dataclass
+class SimulationBlock:
+    """
+    Used for SNPE rounds to store parameters and their neural embeddings.
+    """
+    omegas: torch.Tensor
+    embeds: torch.Tensor
+
+def simulate_round(sampler_fn, n_samples, encoder, seed_offset=0):
+    """
+    Simulates data on CPU, generates embeddings on GPU, 
+    and returns a SimulationBlock.
+    """
+    omegas = sampler_fn((n_samples,)).cpu()
+    
+    print("Parking encoder to CPU to avoid CUDA/Multiprocessing conflict...")
+    encoder.cpu()
+    import gc; gc.collect(); torch.cuda.empty_cache()
+        
+    print(f"Launching Stage 2 parallel simulation...")
+    
+    # 1. Simulate (CPU)
+    X_list = Parallel(n_jobs=N_JOBS, verbose=1)(
+        delayed(worker_simulate)(i, omegas[i], seed_offset=seed_offset) 
+        for i in range(n_samples)
+    )
+
+    print("Moving encoder back to GPU...")
+    encoder.to(device)
+    
+    # 2. Embed (GPU)
+    encoder.eval()
+    embeds = []
+    with torch.no_grad():
+        for x_trial in X_list:
+            # Move input to GPU -> Encode -> Move result back to CPU
+            # Processing trial-by-trial avoids GPU memory overflow
+            tensor_x = torch.tensor(x_trial, dtype=torch.float32).unsqueeze(0)
+            emb = encoder(tensor_x.to(device)).cpu()
+            embeds.append(emb)
+            
+    embeds_tensor = torch.cat(embeds, dim=0)
+    
+    return SimulationBlock(omegas=omegas, embeds=embeds_tensor)
+
 def run_snpe(args, prior, encoder):
+    # Move Encoder to GPU
+    encoder = encoder.to(device)
+    
     # Round 1
-    print(f"[Round1] Simulating {args.n1_pre} pairs...")
+    print(f"\n [Round1] Simulating {args.n1_pre} pairs...")
+    
+    # We pass the sampler function directly
     block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0)
     
     stdzr = SummaryStandardizer()
-    embeds_1_z = stdzr.fit_transform(block1.embeds)
+    # Note: block1.embeds is already a tensor from our helper
+    embeds_1_z = stdzr.fit_transform(block1.embeds.numpy())
     
-    # Save standardizer using numpy
     np.save(STD_MEAN_PATH, stdzr.mean_)
     np.save(STD_STD_PATH, stdzr.std_)
 
-    print(f"[Round1] Training SNPE ({args.density})...")
-    inference = SNPE(prior=prior, density_estimator=args.density)
+    print(f"[Round1] Training SNPE ({args.density}) on {device}...")
+    
+    inference = SNPE(prior=prior, density_estimator=args.density, device=str(device))
     inference.append_simulations(block1.omegas, torch.tensor(embeds_1_z, dtype=torch.float32))
-    density = inference.train()
+    
+    density = inference.train(
+        stop_after_epochs=20, 
+        max_num_epochs=500
+    )
     posterior_1 = inference.build_posterior(density)
     
     with open(POST1_PATH, "wb") as f: pickle.dump(posterior_1, f)
 
     # Round 2 (Optional)
     if args.n2 > 0:
-        print(f"[Round2] Active Learning with {args.n2} simulations...")
+        print(f"\n [Round2] Fine Tuning with {args.n2} simulations...")
 
-        ref_x = torch.tensor(embeds_1_z.mean(axis=0, keepdims=True), dtype=torch.float32)
+        ref_x = torch.tensor(embeds_1_z.mean(axis=0, keepdims=True), dtype=torch.float32).to(device)
+        
         # Mixture Proposal
         def proposal_sampler(shape):
-            n = shape[0]; n_prior = int(args.mix_prior_frac * n); n_post = n - n_prior
+            n = shape[0]
+            n_prior = int(args.mix_prior_frac * n)
+            n_post = n - n_prior
             
+            # Sample from posterior (CPU/GPU handled by sbi, but ensure ref_x is compatible)
             post_samples = posterior_1.sample((n_post,), x=ref_x).reshape(n_post, -1)
-            return torch.cat([prior.sample((n_prior,)), post_samples], dim=0)
+            # return torch.cat([prior.sample((n_prior,)), post_samples], dim=0)
+            return torch.cat([
+                    prior.sample((n_prior,)).to(device), 
+                    post_samples.to(device)
+                ], dim=0)
 
         block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000)
-        embeds_2_z = stdzr.transform(block2.embeds)
+        
+        # Transform using existing standardizer
+        embeds_2_z = stdzr.transform(block2.embeds.numpy())
 
         omegas_all = torch.cat([block1.omegas, block2.omegas], 0)
         embeds_all = torch.cat([torch.tensor(embeds_1_z), torch.tensor(embeds_2_z)], 0)
 
-        print("[Merged] Training Final Posterior...")
-        inference = SNPE(prior=prior, density_estimator=args.density)
+        print(f"[Merged] Training Final Posterior on {device}...")
+        
+        # CHANGE 1: Pass device again for new inference object
+        inference = SNPE(prior=prior, density_estimator=args.density, device=str(device))
+        
         inference.append_simulations(omegas_all, embeds_all.float())
-        density = inference.train()
+        
+        # CHANGE 2: Early Stopping
+        density = inference.train(
+            stop_after_epochs=20,
+            max_num_epochs=500
+        )
         posterior_final = inference.build_posterior(density)
     else:
         posterior_final = posterior_1
@@ -408,8 +504,8 @@ def run_snpe(args, prior, encoder):
 
 
 def run_recovery(args, prior, posterior, encoder, standardizer):
-    print(f"[Recovery] Checking {args.K} ground-truth cases...")
-    omegas_true = prior.sample((args.K,))
+    print(f"\n [Recovery] Checking {args.K} ground-truth cases...")
+    omegas_true = prior.sample((args.K,)).cpu()
     details = []
     
     for i in range(args.K):
@@ -419,9 +515,12 @@ def run_recovery(args, prior, posterior, encoder, standardizer):
         # Inference
         X = build_per_trial_features(df_obs)
         with torch.no_grad():
-            z = encoder(torch.tensor(X[None, ...], dtype=torch.float32)).numpy()
+            tensor_x = torch.tensor(X[None, ...], dtype=torch.float32).to(device)
+            z = encoder(tensor_x).cpu().numpy()
+            
         z_z = standardizer.transform(z)
-        samples = posterior.sample((args.num_post,), x=torch.tensor(z_z, dtype=torch.float32))
+        samples = posterior.sample((args.num_post,),
+                                   x=torch.tensor(z_z, dtype=torch.float32).to(device)).cpu()
         
         # Stats
         row = {"case": i}
@@ -437,7 +536,7 @@ def run_recovery(args, prior, posterior, encoder, standardizer):
         details.append(row)
 
     pd.DataFrame(details).to_csv(RECOVERY_CSV, index=False)
-    print(f"[Recovery] Saved to {RECOVERY_CSV}")
+    print(f"\n [Recovery] Saved to {RECOVERY_CSV}")
 
 
 def run_inference(args, posterior, encoder, standardizer):
@@ -449,10 +548,14 @@ def run_inference(args, posterior, encoder, standardizer):
     if args.sst_folder: files.extend(Path(args.sst_folder).glob(args.glob_pat))
     files = sorted(files)
     
-    print(f"[Inference] Processing {len(files)} files...")
+    print(f"\n [Inference] Processing {len(files)} files...")
     summaries = []
-
-    for fp in files:
+    
+    pd.options.mode.chained_assignment = None
+    total_files = len(files)
+    for i, fp in enumerate(files):
+        if i % 500 == 0:
+            print(f"   ... Progress: {i}/{total_files} files processed", flush=True)
         try:
             # Parse filename (Assumes NDAR_ID_YEAR_...)
             parts = fp.name.split('_')
@@ -462,10 +565,12 @@ def run_inference(args, posterior, encoder, standardizer):
             df_obs = preprocessing(str(fp))
             X = build_per_trial_features(df_obs)
             with torch.no_grad():
-                z = encoder(torch.tensor(X[None, ...], dtype=torch.float32)).numpy()
+                tensor_x = torch.tensor(X[None, ...], dtype=torch.float32).to(device)
+                z = encoder(tensor_x).cpu().numpy()
             z_z = standardizer.transform(z)
             
-            samples = posterior.sample((args.num_samples,), x=torch.tensor(z_z, dtype=torch.float32))
+            samples = posterior.sample((args.num_samples,), 
+                    x=torch.tensor(z_z, dtype=torch.float32).to(device)).cpu()
             
             # Save Results
             rows = [untransform(s) for s in samples]
@@ -481,11 +586,11 @@ def run_inference(args, posterior, encoder, standardizer):
             summaries.append(s_row.reset_index())
 
         except Exception as e:
-            print(f"[Error] {fp.name}: {e}")
+            print(f"\n [Error] {fp.name}: {e}")
 
     if summaries:
         pd.concat(summaries).to_csv(POST_SUMMARY_CSV, index=False)
-        print(f"[Inference] All summaries saved to {POST_SUMMARY_CSV}")
+        print(f"\n [Inference] All summaries saved to {POST_SUMMARY_CSV}")
 
 
 # --- 7. Main ---
@@ -502,6 +607,7 @@ def main():
     parser.add_argument("--stage", choices=["all", "pretrain", "snpe", "recover", "posterior"], default="all")
     parser.add_argument("--n1_pre", type=int, default=20000, help="Simulations for pretraining/Round 1")
     parser.add_argument("--epochs", type=int, default=5, help="Pretraining epochs")
+    parser.add_argument("--patience", type=int, default=10, help="Early stopping patience")
     parser.add_argument("--n2", type=int, default=15000, help="Round 2 simulations")
     parser.add_argument("--mix_prior_frac", type=float, default=0.2, help="Prior fraction in proposal")
     parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="Density estimator")
@@ -512,7 +618,7 @@ def main():
     parser.add_argument("--real_csv", type=str, default=None, help="Single real CSV")
     parser.add_argument("--sst_folder", type=str, default=None, help="Folder of real CSVs")
     parser.add_argument("--glob_pat", type=str, default="NDAR_*.csv*", help="File pattern")
-    parser.add_argument("--num_samples", type=int, default=20000, help="Posterior samples per subject")
+    parser.add_argument("--num_samples", type=int, default=4000, help="Posterior samples per subject")
 
     args = parser.parse_args()
     ART_DIR.mkdir(exist_ok=True)
@@ -534,6 +640,7 @@ def main():
     encoder = TrialTransformer(in_dim, out_dim=64, use_pos_enc=True)
     encoder.load_state_dict(torch.load(ENC_PATH))
     encoder.eval()
+    encoder.to(device)
     for p in encoder.parameters(): p.requires_grad = False
 
     # 2. SNPE

@@ -34,7 +34,70 @@ def get_percentage(df):
     return perc_gs, perc_ge, perc_gm, perc_ss
 
 
-# --- 2. Distance Metrics (Observed vs Simulated) ---
+# --- 2. Sequential & Temporal Metrics (NEW!) ---
+
+def get_sequential_stats(df, rt_col='rt_real'):
+    """
+    Computes sequential dependencies and global trends.
+    Assumes df is sorted by trial order.
+    
+    Metrics:
+    - pes: Post-Error Slowing (Go RT after Stop Error - Go RT after Go Success)
+    - pss: Post-Stop Slowing (Go RT after Stop Success - Go RT after Go Success)
+    - rt_acf_1: Lag-1 Autocorrelation of Go RTs (Short-term dependency)
+    - rt_acf_2: Lag-2 Autocorrelation of Go RTs
+    - rt_slope: Global RT trend (Fatigue/Practice effect)
+    """
+    try:
+        # Create shifted columns for previous trial info
+        df['prev_result'] = df['result'].shift(1)
+        
+        # Filter for current Go Success trials (we only analyze RT on correct goes)
+        df_gs = df[df['result'] == 'GS'].copy()
+        
+        if df_gs.empty:
+            return np.nan, np.nan, np.nan, np.nan, np.nan
+
+        # --- 1. Post-Trial Adjustments (PES / PSS) ---
+        # Baseline: RT when previous trial was also Go Success
+        rt_after_gs = df_gs[df_gs['prev_result'] == 'GS'][rt_col].mean()
+        
+        # Condition A: RT after Stop Error (PES)
+        rt_after_se = df_gs[df_gs['prev_result'] == 'SE'][rt_col].mean()
+        pes = rt_after_se - rt_after_gs if pd.notna(rt_after_se) and pd.notna(rt_after_gs) else np.nan
+        
+        # Condition B: RT after Stop Success (PSS)
+        rt_after_ss = df_gs[df_gs['prev_result'] == 'SS'][rt_col].mean()
+        pss = rt_after_ss - rt_after_gs if pd.notna(rt_after_ss) and pd.notna(rt_after_gs) else np.nan
+        
+        # Condition C: RT after Go Error (PGE)
+        rt_after_ge = df_gs[df_gs['prev_result'] == 'GE'][rt_col].mean()
+        pges = rt_after_ge - rt_after_gs if (pd.notna(rt_after_ge) and pd.notna(rt_after_gs)) else np.nan
+        
+        # --- 2. Autocorrelation (Temporal Dependency) ---
+        # We compute ACF only on the sequence of Go Success RTs to avoid outlier noise
+        rt_series = df_gs[rt_col]
+        rt_acf_1 = rt_series.autocorr(lag=1)
+        rt_acf_2 = rt_series.autocorr(lag=2)
+        
+        # --- 3. Global Trend (Slope) ---
+        # Regression of RT vs Trial Index (Are they getting slower/tired?)
+        # Re-index to ensure x is 0, 1, 2...
+        y = rt_series.values
+        x = np.arange(len(y))
+        
+        if len(x) > 2:
+            slope, _, _, _, _ = linregress(x, y)
+        else:
+            slope = np.nan
+            
+        return pes, pss, pges, rt_acf_1, rt_acf_2, slope
+
+    except Exception as e:
+        # Fail gracefully if columns missing or data too sparse
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+
+# --- 3. Distance Metrics (Observed vs Simulated) ---
 
 def get_distance(df_obs, df_sim):
     """
@@ -69,90 +132,65 @@ def get_dis_perc(df_obs, df_sim):
     """Absolute difference in response type proportions."""
     p_obs = get_percentage(df_obs)
     p_sim = get_percentage(df_sim)
-    
-    # Calculate absolute difference for each component (GS, GE, GM, SS)
     return tuple(abs(o - s) for o, s in zip(p_obs, p_sim))
 
 
 def get_ws_distance(df_obs, df_sim, result_type):
-    """
-    Wasserstein distance for RT distributions, normalized by a factor (40).
-    """
     try:
         obs = df_obs[df_obs['result'] == result_type]['rt']
         sim = df_sim[df_sim['result'] == result_type]['rt']
-        
-        if len(obs) == 0 or len(sim) == 0:
-            return 1.0
-            
-        # Normalization factor 40 is likely specific to model grid/resolution
+        if len(obs) == 0 or len(sim) == 0: return 1.0
         return wasserstein_distance(obs, sim) / 40.0
     except ValueError:
         return 1.0
 
 
 def get_ks_distance(df_obs, df_sim, column, result_type):
-    """
-    Kolmogorov-Smirnov distance between two empirical RT distributions.
-    """
     df_obs_f = df_obs[df_obs['result'] == result_type]
     df_sim_f = df_sim[df_sim['result'] == result_type]
-
     x = df_obs_f[column].dropna().values.astype(float)
     y = df_sim_f[column].dropna().values.astype(float)
-
-    if x.size == 0 or y.size == 0:
-        return np.nan
-
-    # Compute KS statistic manually for efficiency on sorted arrays
+    if x.size == 0 or y.size == 0: return np.nan
     x.sort()
     y.sort()
-    
     grid = np.unique(np.concatenate([x, y]))
-    if grid.size == 0:
-        return np.nan
-        
+    if grid.size == 0: return np.nan
     Fx = np.searchsorted(x, grid, side='right') / x.size
     Fy = np.searchsorted(y, grid, side='right') / y.size
-
     return float(np.max(np.abs(Fx - Fy)))
 
 
 def get_dis_ssd_mean(df_obs, df_sim):
-    """Absolute difference between mean SSDs."""
-    # Filter for valid SSDs
     obs = df_obs[df_obs['ssd'] >= 0]['ssd']
     sim = df_sim[df_sim['ssd'] >= 0]['ssd']
-
-    if obs.empty or sim.empty:
-        return np.nan
-
+    if obs.empty or sim.empty: return np.nan
     return abs(obs.mean() - sim.mean())
 
 
-# --- 3. Descriptive Statistics (Analysis) ---
+# --- 4. Descriptive Statistics (Analysis) ---
 
 def get_stats_mean(df):
     """
     Compute summary stats for OBSERVED data (uses 'rt_real', 'ssd_real').
+    NOW INCLUDES: Sequential metrics.
     """
-    # Proportions
+    # Standard metrics
     percs = get_percentage(df)
-    
-    # Mean RTs (Observed data usually has 'rt_real' in ms)
     mrt_gs = df[df.result == "GS"].rt_real.mean()
     mrt_ge = df[df.result == "GE"].rt_real.mean()
     mrt_se = df[df.result == "SE"].rt_real.mean()
-    
-    # Stop Signal metrics
     mssd = df.ssd_real.mean() 
     ssrt = mrt_gs - mssd
     
-    # Slopes (inhibition functions)
+    # Slopes
     rate_perc_ss = get_rate_perc_ss_ssd(df)
     rate_rt_se = get_rate_rt_se_ssd(df)
     
-    return (*percs, mrt_gs, mrt_ge, mrt_se, ssrt, rate_perc_ss, rate_rt_se)
+    # --- NEW: Sequential Metrics ---
+    pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df, rt_col='rt_real')
+    
+    return (*percs, mrt_gs, mrt_ge, mrt_se, ssrt, rate_perc_ss, rate_rt_se, 
+            pes, pss, pges, acf1, acf2, slope)
 
 
 def get_stats_mean_sim(df):
@@ -160,45 +198,36 @@ def get_stats_mean_sim(df):
     Compute summary stats for SIMULATED data (uses 'rt' * 25).
     """
     percs = get_percentage(df)
-    
-    # Mean RTs (Simulated data usually has 'rt' in steps, needs scaling)
     mrt_gs = df[df.result == "GS"].rt.mean() * 25
     mrt_ge = df[df.result == "GE"].rt.mean() * 25
     mrt_se = df[df.result == "SE"].rt.mean() * 25
-    
     mssd = df.ssd.mean() * 25
     ssrt = mrt_gs - mssd
-    
     rate_perc_ss = get_rate_perc_ss_ssd(df)
     rate_rt_se = get_rate_rt_se_ssd(df)
     
-    return (*percs, mrt_gs, mrt_ge, mrt_se, ssrt, rate_perc_ss, rate_rt_se)
+    # Calculate sequential stats (scaled RTs)
+    # Note: Simulated data usually needs 'rt' scaled to ms for comparison
+    df['rt_ms'] = df['rt'] * 25
+    pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df, rt_col='rt_ms')
+    
+    return (*percs, mrt_gs, mrt_ge, mrt_se, ssrt, rate_perc_ss, rate_rt_se, 
+            pes, pss, pges, acf1, acf2, slope)
 
 
-# --- 4. Regression / Slope Helpers ---
+# --- 5. Regression / Slope Helpers ---
 
 def get_rate_perc_ss_ssd(df):
-    """Slope of Stop Success Rate vs SSD."""
     try:
         df_stop = df[df['result'].isin(['SS', 'SE'])]
-        if df_stop.empty: 
-            return None
-            
-        # Group by SSD and calculate Success Rate
+        if df_stop.empty: return None
         counts = df_stop.groupby('ssd')['result'].value_counts().unstack(fill_value=0)
-        
-        # Ensure columns exist
         if 'SS' not in counts: counts['SS'] = 0
         if 'SE' not in counts: counts['SE'] = 0
-        
         perc_ss = counts['SS'] / (counts['SS'] + counts['SE'])
-        
         x = perc_ss.index.values
         y = perc_ss.values
-        
-        if len(x) < 2: 
-            return None
-            
+        if len(x) < 2: return None
         rate, _, _, _, _ = linregress(x, y)
         return rate
     except Exception:
@@ -206,20 +235,12 @@ def get_rate_perc_ss_ssd(df):
 
 
 def get_rate_rt_se_ssd(df):
-    """Slope of Signal Respond RT vs SSD."""
     try:
-        # Filter for Signal Errors (failed stops)
         df_se = df[df['result'] == 'SE']
-        
-        # Calculate mean RT per SSD
         means = df_se.groupby('ssd')['rt'].mean()
-        
         x = means.index.values
         y = means.values
-        
-        if len(x) < 2:
-            return None
-
+        if len(x) < 2: return None
         rate, _, _, _, _ = linregress(x, y)
         return rate
     except Exception:

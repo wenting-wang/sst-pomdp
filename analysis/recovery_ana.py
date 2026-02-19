@@ -1,166 +1,213 @@
-import sys
-from pathlib import Path
-current_dir = Path(__file__).resolve().parent
-sys.path.append(str(current_dir.parent)) 
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import AnchoredText
+import numpy as np
+import pandas as pd
+from pathlib import Path
+import string
 
-# --- Configuration & Paths ---
+# ==========================================
+# 1. CONFIGURATION & PATHS
+# ==========================================
 
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
-OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
-
-# Inputs
-RECOVERY_CSV = OUT_DIR / "recovery.csv"
-
-# Output
-OUTPUT_PLOT = OUT_DIR / "param_recovery.png"
+# Update these paths as needed for your local environment
+OUT_DIR = Path("/Users/w/sst-abcd-adhd-mac/sst-pomdp-main/outputs")
+RECOVERY_CSV = Path("/Users/w/Desktop/833725/recovery_details.csv")
+OUTPUT_PLOT = OUT_DIR / "param_recovery.png" 
 
 # Parameters Config
 PARAMS = [
-    "q_d_n", "q_d", "q_s_n", "q_s", 
-    "cost_stop_error", "cost_time"
+    "q_d", "q_s", "cost_stop_error",
+    "q_d_n", "q_s_n", "inv_temp",
 ]
 
+# LaTeX formatted names
 PARAM_DISPLAY_NAMES = {
     'q_d_n': r"$\chi'$",
     'q_d': r"$\chi$",
     'q_s_n': r"$\delta'$",
     'q_s': r"$\delta$",
     'cost_stop_error': r"$c_{\mathrm{se}}$",
-    'cost_time': r"$c_t$",
+    "inv_temp": r"$\varphi$",
 }
 
 # Plot Settings
-N_COLS = 3
-MAX_POINTS = None  # Set to an int (e.g., 2000) to downsample scatter points for speed
-SCATTER_COLOR = "black"
-LINE_COLOR = "black"
+N_COLS = 3 
+MAX_POINTS = 2000 # Downsample for plotting speed if N is huge
 
+# ==========================================
+# 2. PLOS STYLING SETUP
+# ==========================================
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
-# --- Core Functions ---
+STYLE = {
+    "label_fontsize": 10,
+    "title_fontsize": 11,
+    "tick_fontsize": 9,
+    "panel_label_size": 12,
+    
+    "scatter_color": "#2F2F2F", # Dark Charcoal
+    "scatter_alpha": 0.4,
+    "scatter_size": 12,
+    
+    "line_color": "black",
+    "line_width": 0.8,
+    "line_alpha": 0.5,
+    "line_style": "--",
+}
+
+# ==========================================
+# 3. CORE FUNCTIONS
+# ==========================================
 
 def load_data(csv_path):
     """Loads the recovery details CSV."""
     if not csv_path.exists():
         raise FileNotFoundError(f"Recovery file not found: {csv_path}")
-    
     df = pd.read_csv(csv_path)
-    print(f"Loaded recovery data: {len(df)} records.")
     return df
 
-
-def safe_corr(x, y, method=pearsonr):
-    """
-    Computes correlation safely, handling NaNs and insufficient data points.
-    Returns: (correlation_coefficient, p_value, valid_mask)
-    """
+def get_stats(x, y):
+    """Computes Pearson r and RMSE."""
     mask = np.isfinite(x) & np.isfinite(y)
+    x = x[mask]
+    y = y[mask]
     
-    # Need at least 3 points and variance in both x and y
-    if mask.sum() >= 3 and np.unique(x[mask]).size > 1 and np.unique(y[mask]).size > 1:
-        r, p = method(x[mask], y[mask])
-        return float(r), float(p), mask
-        
-    return np.nan, np.nan, mask
-
+    if len(x) < 2:
+        return np.nan, np.nan
+    
+    r, p = pearsonr(x, y)
+    rmse = np.sqrt(np.mean((x - y)**2))
+    return r, rmse
 
 def plot_recovery_grid(df, params, output_path):
     """
-    Generates a grid of scatter plots comparing True vs. Recovered parameters.
+    Generates a publication-quality grid of True vs. Recovered parameters.
     """
     n_params = len(params)
     n_rows = int(np.ceil(n_params / N_COLS))
-    
-    fig, axes = plt.subplots(n_rows, N_COLS, figsize=(4.5 * N_COLS, 4.2 * n_rows))
-    axes = axes.flatten()
 
-    print("\n--- Correlation Results ---")
+    # Calculate figure size: PLOS width is ~7.5 inches. 
+    fig, axes = plt.subplots(n_rows, N_COLS, figsize=(7.5, n_rows * 2.6), dpi=300)
+    axes = axes.flatten()
+    
+    # panel_labels = list(string.ascii_uppercase) # A, B, C...
 
     for i, param in enumerate(params):
         ax = axes[i]
         
-        # Extract Data
+        # 0. Panel Label (A, B, C...)
+        # ax.text(-0.2, 1.1, panel_labels[i], transform=ax.transAxes,
+                # fontsize=STYLE['panel_label_size'], fontweight='bold', va='top', ha='right')
+
+        # 1. Extract Data
         col_true = f"gt_{param}"
         col_rec = f"mu_{param}"
-        
+
         if col_true not in df.columns or col_rec not in df.columns:
-            print(f"Skipping {param}: Columns not found.")
-            ax.set_visible(False)
+            ax.axis('off')
             continue
 
         x = df[col_true].to_numpy(float)
         y = df[col_rec].to_numpy(float)
 
-        # 1. Calculate Correlation
-        r_p, p_p, mask = safe_corr(x, y, pearsonr)
-        print(f"{param:<15} Pearson r={r_p:.3f} (p={p_p:.3g})")
-
-        # 2. Filter Valid Data
-        x = x[mask]
-        y = y[mask]
-
-        # 3. Downsample if requested (for cleaner SVG/PDFs or speed)
-        if MAX_POINTS is not None and len(x) > MAX_POINTS:
-            rng = np.random.default_rng(2025)
-            idx = rng.choice(len(x), size=MAX_POINTS, replace=False)
-            x = x[idx]
-            y = y[idx]
-
-        # 4. Plot Scatter
-        ax.scatter(x, y, s=10, alpha=0.7, color=SCATTER_COLOR, edgecolors='none')
-
-        # 5. Plot Identity Line (x=y)
-        # Calculate range with padding
-        if len(x) > 0:
-            lo = min(x.min(), y.min())
-            hi = max(x.max(), y.max())
-            pad = 0.1 * (hi - lo + 1e-8)
-            lo -= pad
-            hi += pad
-            
-            ax.plot([lo, hi], [lo, hi], "--", color=LINE_COLOR, linewidth=1)
-            ax.set_xlim(lo, hi)
-            ax.set_ylim(lo, hi)
-
-        # 6. Styling
-        display_name = PARAM_DISPLAY_NAMES.get(param, param)
-        ax.set_xlabel(f"True {display_name}", fontsize=14)
-        ax.set_ylabel(f"Recovered {display_name}", fontsize=14)
+        # 2. Stats & Filtering
+        r_val, rmse_val = get_stats(x, y)
         
-        # Tufte-style axes (Left/Bottom only)
+        # Print stats to console
+        print(f"Parameter: {param:15s} | r = {r_val:.3f} | RMSE = {rmse_val:.3f}")
+
+        # Downsample for visualization if too dense
+        if MAX_POINTS is not None and len(x) > MAX_POINTS:
+            rng = np.random.default_rng(42)
+            idx = rng.choice(len(x), size=MAX_POINTS, replace=False)
+            x_plot, y_plot = x[idx], y[idx]
+        else:
+            x_plot, y_plot = x, y
+
+        # 3. Determine Axis Limits & Ticks (Logic Fix applied here)
+        # =========================================================
+        
+        # Default calculations
+        all_vals = np.concatenate([x, y])
+        v_min, v_max = np.min(all_vals), np.max(all_vals)
+        pad = (v_max - v_min) * 0.05
+        if pad == 0: pad = 0.1
+        lims = [v_min - pad, v_max + pad]
+        current_ticks = None
+
+        # --- Special Handling for Chi and Delta ---
+        if param in ['q_d', 'q_s']:
+            # Force range [0.5, 1.02] and explicit ticks including 0.5
+            lims = [0.48, 1.02]
+            current_ticks = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+        # --- Special Handling for Chi' and Delta' ---
+        elif param in ['q_d_n', 'q_s_n']:
+            # Force range [0, 1.02] for cleaner look
+            lims = [-0.02, 1.02]
+            current_ticks = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+        # Apply settings
+        ax.set_xlim(lims)
+        ax.set_ylim(lims)
+        
+        if current_ticks is not None:
+            ax.set_xticks(current_ticks)
+            ax.set_yticks(current_ticks)
+
+        # 4. Plot Identity Line (Diagonal)
+        ax.plot(lims, lims, linestyle=STYLE['line_style'], color=STYLE['line_color'], 
+                linewidth=STYLE['line_width'], alpha=STYLE['line_alpha'], zorder=1)
+
+        # 5. Plot Scatter
+        ax.scatter(x_plot, y_plot, 
+                   s=STYLE['scatter_size'], 
+                   color=STYLE['scatter_color'], 
+                   alpha=STYLE['scatter_alpha'], 
+                   edgecolors='none', 
+                   zorder=2)
+
+        # 6. Annotation (Stats)
+        stats_text = f"$r = {r_val:.3f}$\n$RMSE = {rmse_val:.3f}$"
+        at = AnchoredText(stats_text, prop=dict(size=STYLE['tick_fontsize']), 
+                          frameon=False, loc='upper left')
+        ax.add_artist(at)
+
+        # 7. Formatting
+        display_name = PARAM_DISPLAY_NAMES.get(param, param)
+        
+        ax.set_xlabel(f"True {display_name}", fontsize=STYLE['label_fontsize'])
+        ax.set_ylabel(f"Recovered {display_name}", fontsize=STYLE['label_fontsize'])
+        
+        ax.set_aspect('equal')
+        ax.tick_params(axis='both', which='major', labelsize=STYLE['tick_fontsize'])
+        
+        # Spines
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_linewidth(1)
-        ax.spines['bottom'].set_linewidth(1)
-        ax.spines['left'].set_color('black')
-        ax.spines['bottom'].set_color('black')
-        ax.tick_params(axis="both", colors="black")
 
-    # Hide unused subplots
+    # Hide empty subplots
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
 
     plt.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"\nPlot saved to: {output_path}")
+    plt.subplots_adjust(wspace=0.35, hspace=0.4) 
 
+    if output_path:
+        fig.savefig(output_path, dpi=300, bbox_inches='tight', pil_kwargs={"compression": "tiff_lzw"})
+        print(f"Plot saved to: {output_path}")
+    else:
+        plt.show()
 
-# --- Main Execution ---
-
-def main():
-    try:
-        # 1. Load Data
-        df = load_data(RECOVERY_CSV)
-        
-        # 2. Plot Recovery
-        plot_recovery_grid(df, PARAMS, OUTPUT_PLOT)
-        
-    except Exception as e:
-        print(f"An error occurred: {e}")
+# ==========================================
+# 4. MAIN EXECUTION
+# ==========================================
 
 if __name__ == "__main__":
-    main()
+    try:
+        df_rec = load_data(RECOVERY_CSV)
+        plot_recovery_grid(df_rec, PARAMS, OUTPUT_PLOT)
+    except Exception as e:
+        print(f"Error: {e}")

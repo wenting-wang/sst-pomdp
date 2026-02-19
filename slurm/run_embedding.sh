@@ -19,7 +19,7 @@ OUTPUT_DIR="${SLURM_SUBMIT_DIR}"                # Final destination for results
 
 # Absolute path to your existing trained model (encoder.pt)
 # NOTE: This path must exist before the job starts.
-SOURCE_MODEL_PATH="/home/wwang/outputs/encoder.pt"
+SOURCE_MODEL_PATH="/home/wwang/ptmp/833725/outputs/encoder.pt"
 
 CONDA_ENV="pymc_env"
 
@@ -44,7 +44,7 @@ cd "${SCRATCH_DIRECTORY}"
 
 # A) Copy scripts and metadata CSV from the directory where you submitted the job
 cp "${SLURM_SUBMIT_DIR}/embedding.py"       .
-cp "${SLURM_SUBMIT_DIR}/preprocessing.py"   . || true
+cp -r "${SLURM_SUBMIT_DIR}/utils/"   .
 cp "${SLURM_SUBMIT_DIR}/${CSV_FILE}"        .
 
 # B) Copy the trained model artifact and rename it locally to 'encoder.pt'
@@ -64,10 +64,9 @@ echo "Starting Embedding Generation..."
 # Run the python script
 # We pass the metadata CSV, the raw data folder, the encoder path (now local 'encoder.pt'), and the output filename.
 srun python embedding.py \
-    --files_list "${CSV_FILE}" \
-    --data_dir "${SST_FOLDER}" \
-    --encoder_path "./encoder.pt" \
-    --meta_csv "${CSV_FILE}" \
+    --csv "${CSV_FILE}" \
+    --folder "${SST_FOLDER}" \
+    --model_path "./encoder.pt" \
     --out "${OUTPUT_FILE}"
 
 # ==========================================

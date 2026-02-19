@@ -30,9 +30,9 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
                                         "right": model.p_x_dR_z0}[true_go_state])
         return x_seq, y_seq, ssd
 
-    def get_action_and_qvals(beta, sigma, t_step):
+    def get_action_and_qvals(beta, zeta, t_step):
         beta_idx = np.searchsorted(model.beta_space, beta, side="left")
-        zeta_idx = np.searchsorted(model.zeta_space, sigma, side="left")
+        zeta_idx = np.searchsorted(model.zeta_space, zeta, side="left")
         idx = (t_step, beta_idx, zeta_idx)
 
         v_left = model.value_left[idx]
@@ -59,7 +59,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
     beta, zeta, sigma = 0.5, 0.0, model.update_sigma(0.0, 0)
     beta_seq, zeta_seq, sigma_seq = [beta], [zeta], [sigma]
     action, q_vals, (v_left, v_right, v_wait) = get_action_and_qvals(
-        beta, sigma, 0)
+        beta, zeta, 0)
 
     if verbose:
         value_seq = [q_vals[action]]
@@ -83,7 +83,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
         sigma_seq.append(sigma)
 
         action, q_vals, (v_left, v_right, v_wait) = get_action_and_qvals(
-            beta, sigma, t_step)
+            beta, zeta, t_step)
 
         if verbose:
             value_seq.append(q_vals[action])

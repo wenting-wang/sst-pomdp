@@ -14,14 +14,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import warnings
-
-# Try to import preprocessing, identical to pipeline
-try:
-    from preprocessing import preprocessing
-except ImportError:
-    print("[Warning] 'preprocessing' module not found. Please ensure preprocessing.py is in the directory.")
-    # Dummy placeholder if needed, but likely will fail at runtime if real data is needed
-    def preprocessing(fp): raise NotImplementedError("preprocessing module missing")
+from utils.preprocessing import preprocessing
 
 # -----------------------------
 # Configuration & Constants

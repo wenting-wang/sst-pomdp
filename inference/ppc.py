@@ -28,34 +28,30 @@ from core import simulation
 # ==========================================
 # Base paths
 RAW_DATA_DIR = Path("/home/wwang/data/sst_valid_base")
-WORK_DIR = Path("/home/wwang/831633") 
 
 # Input: Posterior Summary
-POSTERIOR_SUMMARY_CSV = Path("/home/wwang/ptmp/831633/outputs/posterior_summary.csv")
+POSTERIOR_SUMMARY_CSV = Path("/home/wwang/ptmp/833725/outputs/posterior_summary.csv")
 
 # Output: PPC Metrics
-OUTPUT_PPC_CSV = Path("/home/wwang/831633/ppc_metrics.csv")
+OUTPUT_PPC_CSV = Path("/home/wwang/ptmp/833725/ppc_metrics.csv")
 # ==========================================
-
 
 # Model Constants
 FIXED_PARAMS = {
     "cost_go_error":   1.0,
     "cost_go_missing": 1.0,
-    "inv_temp":        50.0,
+    "cost_time": 0.001,
     "rate_stop_trial": 1.0 / 6.0,
 }
 
-LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s"]
-LOG_PARAMS = ["cost_stop_error", "cost_time", "ndt"]
+LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s", "inv_temp"]
+LOG_PARAMS = ["cost_stop_error"]
 PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
-
 
 @dataclass
 class SimConfig:
     """Configuration for PPC Simulation."""
     n_rep: int = 1         # Single point estimate simulation
-    rate_stop_trial: float = 1.0/6.0
     seed: int = 2025
 
 
@@ -66,7 +62,11 @@ def load_posterior_mean(summary_csv: Path, subject_id: str) -> Dict[str, float]:
     Loads the MAP (Mean) parameter estimates for a specific subject.
     """
     # Load entire summary
-    df = pd.read_csv(summary_csv)
+    col_names = [
+        "param", "mean", "std", "hdi_5", "hdi_50", "hdi_95", 
+        "subject_id", "subject_year"
+    ]
+    df = pd.read_csv(summary_csv, header=None, names=col_names)
     
     # Filter for subject
     subset = df[df["subject_id"] == subject_id]

@@ -1,9 +1,11 @@
 #!/bin/bash -l
-#SBATCH --job-name=PIPELINE
-#SBATCH --partition=compute
+#SBATCH --job-name=TeSBI
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
+#SBATCH --exclusive=user
+#SBATCH --mem=0
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=32
 #SBATCH --time=20-00:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=wenting.wang.cd@outlook.com
@@ -17,122 +19,145 @@ set -eo pipefail
 # ==========================================
 
 # --- OPTION A: SMOKE TEST (Fast, for debugging) ---
-# N1_PRE=500
-# EPOCHS=2
-# N2=200
-# DENSITY=maf            # MAF is faster/more stable for very small samples
-# REC_K=5
-# REC_NUM_POST=500
-# NUM_SAMPLES_INF=3      # Small number of posterior samples per subject
+# N1_PRE=100
+# EPOCHS=5
+# PATIENCE=1           
+# N2=100
+# DENSITY=maf            
+# REC_K=10
+# REC_NUM_POST=100
+# NUM_SAMPLES_INF=100   
 
 # --- OPTION B: REAL RUN (Production) ---
 N1_PRE=30000
-EPOCHS=8
+EPOCHS=100
+PATIENCE=15           
 N2=20000
-DENSITY=nsf              # NSF is generally more expressive for complex posteriors
-REC_K=200
-REC_NUM_POST=4000
-NUM_SAMPLES_INF=14988    # High number of posterior samples
+DENSITY=nsf              
+REC_K=500
+REC_NUM_POST=2000
+NUM_SAMPLES_INF=2000    
 
-# --- DATA PATHS ---
-# Set folder to process real data (leave empty "" to skip Stage 4)
+# # --- DATA PATHS ---
 SST_FOLDER="/home/wwang/data/sst_valid_base"
 GLOB_PAT="NDAR_*.csv.zip"
 
-# --- ENVIRONMENT ---
-CONDA_ENV="pymc_env"
+# # ==========================================
+# # SETUP
+# # ==========================================
 
-# ==========================================
-# SETUP
-# ==========================================
-
-# 1. Threading Hygiene (limit thread contention)
+# # 1. Threading Hygiene 
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 export SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
-# 2. Scratch Directory Setup
+# # 2. Scratch Directory Setup
 SCRATCH_DIRECTORY=/ptmp/${USER}/${SLURM_JOBID}
 mkdir -p "${SCRATCH_DIRECTORY}"
 echo "Running in scratch: ${SCRATCH_DIRECTORY}"
 
-# 3. Copy source files to scratch
+# # 3. Copy source files to scratch
 cd "${SCRATCH_DIRECTORY}"
-cp "${SLURM_SUBMIT_DIR}/models.py"                       .
-cp "${SLURM_SUBMIT_DIR}/simulation.py"                   .
-cp "${SLURM_SUBMIT_DIR}/preprocessing.py"                . || true
-cp "${SLURM_SUBMIT_DIR}/tesbi_m0.py"   .
+cp -r "${SLURM_SUBMIT_DIR}/core/"    .
+cp -r "${SLURM_SUBMIT_DIR}/utils/"   .
+cp "${SLURM_SUBMIT_DIR}/tesbi_m0.py"    .
+# cp "${SLURM_SUBMIT_DIR}/check_gpu.py" . # Optional
 
-# Create output directory
 mkdir -p outputs
 
 # 4. Activate Environment
 source /home/${USER}/miniconda3/etc/profile.d/conda.sh
-conda activate "${CONDA_ENV}"
+conda activate pymc_env
 
-echo "=== ENV INFO ==="
-python -c "import sys,torch; print('Python', sys.version); print('Torch', torch.__version__)"
+unset CUDA_VISIBLE_DEVICES
+echo "Running nvidia-smi to confirm hardware visibility:"
+nvidia-smi
 
 # ==========================================
 # EXECUTION STAGES
 # ==========================================
 
+JOB_START_TIME=$(date +%s)
+
 # --- Stage 1: Pretrain Encoder ---
-echo "[Stage 1] Pretraining Encoder..."
-srun --cpu-bind=cores python tesbi.py \
+echo "----------------------------------------------------------------"
+echo "[Stage 1] Pretraining Encoder... Started at $(date)"
+SECONDS=0
+
+srun python -u tesbi_m0.py \
   --stage pretrain \
   --n1_pre ${N1_PRE} \
-  --epochs ${EPOCHS}
+  --epochs ${EPOCHS} \
+  --patience ${PATIENCE}
+
+duration=$SECONDS
+echo "[Stage 1] Finished. Duration: $(($duration / 60)) min $(($duration % 60)) sec."
 
 # --- Stage 2: Train SNPE ---
-echo "[Stage 2] Training SNPE (density=${DENSITY})..."
-srun --cpu-bind=cores python tesbi.py \
+echo "----------------------------------------------------------------"
+echo "[Stage 2] Training SNPE... Started at $(date)"
+SECONDS=0
+
+srun python -u tesbi_m0.py \
   --stage snpe \
   --n1_pre ${N1_PRE} \
   --n2 ${N2} \
   --density ${DENSITY}
 
+duration=$SECONDS
+echo "[Stage 2] Finished. Duration: $(($duration / 60)) min $(($duration % 60)) sec."
+
 # --- Stage 3: Recovery Check ---
-echo "[Stage 3] Running Recovery Sweep (K=${REC_K})..."
-srun --cpu-bind=cores python tesbi.py \
+echo "----------------------------------------------------------------"
+echo "[Stage 3] Recovery Sweep... Started at $(date)"
+SECONDS=0
+
+srun python -u tesbi_m0.py \
   --stage recover \
   --K ${REC_K} \
   --num_post ${REC_NUM_POST}
 
+duration=$SECONDS
+echo "[Stage 3] Finished. Duration: $(($duration / 60)) min $(($duration % 60)) sec."
+
 # --- Stage 4: Inference on Real Data ---
+echo "----------------------------------------------------------------"
+echo "[Stage 4] Real Data Inference... Started at $(date)"
+SECONDS=0
+
 if [[ -n "${SST_FOLDER}" && -d "${SST_FOLDER}" ]]; then
-  echo "[Stage 4] Processing Real Data in: ${SST_FOLDER}"
-  srun --cpu-bind=cores python tesbi.py \
+  srun python -u tesbi_m0.py \
     --stage posterior \
     --sst_folder "${SST_FOLDER}" \
     --glob_pat "${GLOB_PAT}" \
     --num_samples ${NUM_SAMPLES_INF}
+    
+  duration=$SECONDS
+  echo "[Stage 4] Finished. Duration: $(($duration / 60)) min $(($duration % 60)) sec."
 else
-  echo "[Stage 4] Skipped (SST_FOLDER not set or invalid)"
+  echo "[Stage 4] Skipped."
 fi
 
 # ==========================================
-# SAVE RESULTS
+# FINAL SUMMARY
 # ==========================================
+JOB_END_TIME=$(date +%s)
+total_duration=$((JOB_END_TIME - JOB_START_TIME))
+echo "================================================================"
 
-echo "Saving results to ${SLURM_SUBMIT_DIR}..."
+# echo "Saving results to ${SLURM_SUBMIT_DIR}..."
+# if [ -d "outputs" ]; then
+#     cp -r outputs "${SLURM_SUBMIT_DIR}/"
+#     echo "Results saved."
+# else
+#     echo "Warning: outputs directory not found!"
+# fi
 
-if [ -d "outputs" ]; then
-    cp -r outputs "${SLURM_SUBMIT_DIR}/"
-    echo "Results saved."
-else
-    echo "Warning: outputs directory not found!"
-fi
+echo "Job Finished. Results are NOT copied back."
+echo "You can find them here: ${SCRATCH_DIRECTORY}"
 
-# ==========================================
-# NO CLEANUP (As requested)
-# ==========================================
-# echo "Cleaning up scratch directory..."
-# rm -rf "${SCRATCH_DIRECTORY}"
-
-echo "Job completed successfully."
-echo "Scratch directory preserved at: ${SCRATCH_DIRECTORY}"
-
+echo "Job Completed Successfully."
+echo "Total Runtime: $(($total_duration / 3600)) hrs $((($total_duration % 3600) / 60)) min $(($total_duration % 60)) sec."
 exit 0

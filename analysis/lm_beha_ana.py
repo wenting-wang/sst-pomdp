@@ -7,7 +7,9 @@ from pathlib import Path
 # ===== 1. Configuration & Paths =====
 
 # Update these paths if necessary
-OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+# OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+OUT_DIR = Path('/Users/w/sst-abcd-adhd-mac/sst-pomdp-main/outputs/')
+
 
 # Inputs
 STATS_CSV = OUT_DIR / "stats_beh_full.csv"
@@ -33,29 +35,48 @@ PREDICTOR_MAPPING = {
     "adhd_med_flag": "Medication",
 }
 
-# ===== 2. Helper Functions (Reference: lm_param.py) =====
+# ===== 2. Helper Functions =====
 
-def p_to_stars(p):
-    if pd.isna(p): return ""
-    if p < 0.001: return r"\textbf{***}"
-    if p < 0.01:  return r"\textbf{**}"
-    if p < 0.05:  return r"\textbf{*}"
-    return ""
-
-def fmt(beta, se, p, is_scientific=False):
-    """Combines Coef, SE, and P-stars into one string."""
-    if pd.isna(beta) or pd.isna(se):
+def format_num(x):
+    """
+    Formats Coef, SE, t:
+    1. Default to 3 decimal places.
+    2. If result is '0.000' or '-0.000', use 4 decimal places.
+    """
+    if pd.isna(x):
         return ""
     
-    if is_scientific:
-        val_str = f"{beta:.2e}"
-        se_str = f"{se:.2e}"
+    s = f"{x:.3f}"
+    # If the result is visually zero, switch to 4 decimal places
+    if s == "0.000" or s == "-0.000":
+        return f"{x:.4f}"
+    return s
+
+def format_p(p):
+    """
+    Formats p-value:
+    1. If p < 0.001, return $<0.001$$^{***}$
+    2. Otherwise, return 3 decimals with stars as superscript if significant.
+    """
+    if pd.isna(p):
+        return ""
+    
+    # Determine stars
+    stars = ""
+    if p < 0.001: stars = "***"
+    elif p < 0.01: stars = "**"
+    elif p < 0.05: stars = "*"
+    
+    # Formatting
+    if p < 0.001:
+        # User requested specific format for very small p-values
+        return r"$<0.001$$^{***}$"
     else:
-        val_str = f"{beta:.4f}"
-        se_str = f"{se:.4f}"
-        
-    stars = p_to_stars(p)
-    return f"{val_str}{stars} ({se_str})"
+        # Standard 3 decimal formatting for larger p-values
+        s = f"{p:.3f}"
+        if stars:
+            return f"{s}$^{{{stars}}}$"
+        return s
 
 def fit_models(df):
     """Fits OLS models and returns a summary dictionary."""
@@ -73,6 +94,7 @@ def fit_models(df):
                 summary[label] = {
                     'beta': fit.params[predictor],
                     'se': fit.bse[predictor],
+                    't': fit.tvalues[predictor],
                     'p': fit.pvalues[predictor]
                 }
         results[dv] = summary
@@ -87,9 +109,6 @@ def build_latex_table(results_dict):
     lines.append(r"\centering")
     lines.append(r"\scriptsize")
     
-    # Use tabularx or standard tabular based on preference; sticking to layout from lm_beha
-    # but using the formatting style of lm_param.
-    
     order = ["mrt_gs", "ssrt", "perc_gs", "perc_ss"]
     
     lines.append(r"\begin{minipage}{\linewidth}")
@@ -100,18 +119,23 @@ def build_latex_table(results_dict):
         sub_lines.append(r"    \begin{subtable}[t]{0.48\linewidth}")
         sub_lines.append(r"    \centering")
         sub_lines.append(f"    \caption{{{SUB_CAP[dv]}}}")
-        sub_lines.append(r"    \begin{tabular}{lc}")
-        sub_lines.append(r"    \toprule")
-        sub_lines.append(r"    \textbf{Predictor} & \textbf{Coef (SE)} \\")
-        sub_lines.append(r"    \midrule")
         
-        # Determine if we should use scientific notation (e.g., for percentages)
-        use_sci = (dv == "perc_ss") 
+        # 5 columns: Predictor, Coef, SE, t, p
+        sub_lines.append(r"    \begin{tabular}{lcccc}")
+        sub_lines.append(r"    \toprule")
+        sub_lines.append(r"    \textbf{Predictor} & \textbf{Coef.} & \textbf{SE} & \textbf{t} & \textbf{p} \\")
+        sub_lines.append(r"    \midrule")
         
         for _, label in PREDICTOR_MAPPING.items():
             res = results_dict[dv].get(label, {})
-            formatted_val = fmt(res.get('beta'), res.get('se'), res.get('p'), use_sci)
-            sub_lines.append(f"    {label} & {formatted_val} \\\\")
+            
+            beta_str = format_num(res.get('beta'))
+            se_str   = format_num(res.get('se'))
+            t_str    = format_num(res.get('t'))
+            # Use specific p-value formatter
+            p_str    = format_p(res.get('p'))
+            
+            sub_lines.append(f"    {label} & {beta_str} & {se_str} & {t_str} & {p_str} \\\\")
             
         sub_lines.append(r"    \bottomrule")
         sub_lines.append(r"    \end{tabular}")
@@ -130,15 +154,15 @@ def build_latex_table(results_dict):
     
     lines.append(r"\end{minipage}")
     
-    # Bottom Section (Reference: lm_param.py)
+    # Bottom Section
     lines.append(r"\vspace{2mm}")
     lines.append(r"\raggedright")
     lines.append(r"\small")
     
     note = (
         r"\textbf{Linear model results for model-agnostic behavioral measures.} "
-        r"Entries are fixed-effect coefficients with SEs in parentheses. "
-        r"Stars denote p-values: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$."
+        r"Table shows fixed-effect coefficients (Coef.), standard errors (SE), t-values (t), and p-values (p). "
+        r"Stars denote significance levels: \textbf{*} $p<.05$, \textbf{**} $p<.01$, \textbf{***} $p<.001$."
     )
     lines.append(rf"\caption{{{note}}}")
     lines.append(r"\label{tab:lm_beha_all}")

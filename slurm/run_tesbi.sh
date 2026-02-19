@@ -79,7 +79,7 @@ nvidia-smi
 # EXECUTION STAGES
 # ==========================================
 
-JOB_START_TIME=$SECONDS
+JOB_START_TIME=$(date +%s)
 
 # --- Stage 1: Pretrain Encoder ---
 echo "----------------------------------------------------------------"
@@ -143,7 +143,8 @@ fi
 # ==========================================
 # FINAL SUMMARY
 # ==========================================
-total_duration=$(($SECONDS - $JOB_START_TIME))
+JOB_END_TIME=$(date +%s)
+total_duration=$((JOB_END_TIME - JOB_START_TIME))
 echo "================================================================"
 
 # echo "Saving results to ${SLURM_SUBMIT_DIR}..."
@@ -159,5 +160,4 @@ echo "You can find them here: ${SCRATCH_DIRECTORY}"
 
 echo "Job Completed Successfully."
 echo "Total Runtime: $(($total_duration / 3600)) hrs $((($total_duration % 3600) / 60)) min $(($total_duration % 60)) sec."
-
 exit 0

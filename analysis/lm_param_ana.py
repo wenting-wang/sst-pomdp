@@ -7,26 +7,28 @@ import statsmodels.formula.api as smf
 # --- Configuration & Paths ---
 
 # Update these paths if necessary
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
-OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+# BASE_DIR = Path('/kyb/agpd/wwang/data/')
+# OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+OUT_DIR = Path('/Users/w/sst-abcd-adhd-mac/sst-pomdp-main/outputs/')
 
 # Inputs
-PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
+# PARAMS_CSV = OUT_DIR / "posterior_summary.csv"
+PARAMS_CSV = Path("/Users/w/Desktop/833725/posterior_summary.csv") 
 STATS_CSV = OUT_DIR / "stats_beh_full.csv"
 
 # Output
 OUTPUT_TEX = OUT_DIR / "linear_model_parameters.tex"
 
 # Analysis Config
-PARAMS_OF_INTEREST = ['q_d_n', 'q_d', 'q_s_n', 'q_s', 'cost_stop_error', 'cost_time']
+PARAMS_OF_INTEREST = ['q_d', 'q_d_n', 'q_s', 'q_s_n', 'cost_stop_error', 'inv_temp']
 
 PARAM_DISPLAY_NAMES = {
-    'q_d_n': r"$\chi'$",
     'q_d': r"$\chi$",
-    'q_s_n': r"$\delta'$",
+    'q_d_n': r"$\chi'$",
     'q_s': r"$\delta$",
+    'q_s_n': r"$\delta'$",
     'cost_stop_error': r"$c_{\mathrm{se}}$",
-    'cost_time': r"$c_t$",
+    'inv_temp': r"$\varphi$",
 }
 
 
@@ -48,7 +50,7 @@ def load_and_prep_data(params_path, stats_path):
     # Pivot
     df_pivot = df_param.pivot(
         index=['subject_id', 'year'], 
-        columns='param', 
+        columns='index', 
         values='mean'
     ).reset_index()
     df_pivot.columns.name = None
@@ -134,12 +136,25 @@ def build_latex_table(summary_df):
     def fmt(beta, se, p, is_scientific=False):
         if pd.isna(beta) or pd.isna(se):
             return ""
+        
         if is_scientific:
             val_str = f"{beta:.2e}"
             se_str = f"{se:.2e}"
         else:
-            val_str = f"{beta:.4f}"
-            se_str = f"{se:.4f}"
+            # --- Modified Logic Starts Here ---
+            # Format Beta
+            val_str = f"{beta:.3f}"
+            # If it rounds to 0.000, use 4 decimal places
+            if val_str == "0.000" or val_str == "-0.000":
+                val_str = f"{beta:.4f}"
+            
+            # Format Standard Error
+            se_str = f"{se:.3f}"
+            # If it rounds to 0.000, use 4 decimal places
+            if se_str == "0.000" or se_str == "-0.000":
+                se_str = f"{se:.4f}"
+            # --- Modified Logic Ends Here ---
+
         stars = p_to_stars(p)
         return f"{val_str}{stars} ({se_str})"
 

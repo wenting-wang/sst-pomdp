@@ -9,8 +9,10 @@ from typing import Iterable, Optional, Union, List, Tuple
 
 # --- Configuration & Paths ---
 
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
-OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+# BASE_DIR = Path('/kyb/agpd/wwang/data/')
+# OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
+BASE_DIR = Path('/Users/w/Desktop/data/')
+OUT_DIR = Path('/Users/w/sst-abcd-adhd-mac/sst-pomdp-main/outputs/')
 
 # Inputs (This file already contains merged demographics and stats)
 DATA_CSV = OUT_DIR / "stats_beh_full.csv"
