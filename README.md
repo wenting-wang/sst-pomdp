@@ -19,8 +19,6 @@ This code is prepared for open-science reproducibility and is structured to allo
 </p>
 
 
----
-
 ## Quick Start
 
 We provide an automated quick run test. It skips the raw data processing, uses the provided mock processed data, runs a model sanity check, performs a lightweight parameter inference, and tests all analysis scripts. It is designed to finish in a few minutes.
@@ -60,7 +58,6 @@ python run_quick_check.py
 
 If successful, the script will output `ALL TESTS PASSED SUCCESSFULLY!` and you can view the generated artifacts in the `outputs/` folder.
 
----
 
 ## Detailed Guide
 
@@ -161,7 +158,6 @@ python analysis/tabl_lm_behavior.py
 
 **Expected Output:** Final `.png` figures and `.tex` tables saved directly to the `outputs/` directory.
 
----
 
 ## Project Structure
 
@@ -193,7 +189,6 @@ The repository is divided into modular folders separating the core computational
   * `check_gpu.py`: Utility to verify CUDA/GPU availability.
 * `environment.yml`: Environment setup file to install necessary dependencies.
 
----
 
 ## Reference
 
@@ -201,7 +196,6 @@ For full theoretical details, mathematical derivations, and comprehensive result
 
 [citation/link here when published]
 
----
 
 ## Contact
 
