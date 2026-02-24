@@ -28,9 +28,23 @@ cd sst-pomdp
 
 2. Create and activate the Conda environment:
 
+You can set up your environment using either Conda or standard Python.
+
+**Option A: Using Conda (Recommended)**
+
 ```bash
 conda env create -f environment.yml
 conda activate sst-pomdp-env
+```
+
+Option B: Using standard Python (`venv`)
+
+If you do not have Conda installed, you can use Python's built-in virtual environment and `pip`:
+
+```bash
+python3 -m venv sst-pomdp-env
+source sst-pomdp-env/bin/activate
+pip install -r requirements.txt
 ```
 
 3. Run the automated check:
