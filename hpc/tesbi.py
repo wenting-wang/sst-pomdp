@@ -542,7 +542,9 @@ def run_snpe(args, prior, encoder):
     
     density = inference.train(
         stop_after_epochs=20, 
-        max_num_epochs=500
+        max_num_epochs=500,
+        show_train_summary=False,
+        summary_writer=None
     )
     posterior_1 = inference.build_posterior(density)
     
@@ -586,7 +588,9 @@ def run_snpe(args, prior, encoder):
         # Early Stopping
         density = inference.train(
             stop_after_epochs=20,
-            max_num_epochs=500
+            max_num_epochs=500,
+            show_train_summary=False,
+            summary_writer=None
         )
         posterior_final = inference.build_posterior(density)
     else:
