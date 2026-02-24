@@ -9,7 +9,7 @@
 module purge
 # module load anaconda3 (or whatever you use)
 source $(conda info --base)/etc/profile.d/conda.sh
-conda activate pymc_env
+conda activate sst-pomdp-env
 
 echo "Attempting to force GPU visibility..."
 unset CUDA_VISIBLE_DEVICES

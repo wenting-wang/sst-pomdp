@@ -1,33 +1,35 @@
-
-from matplotlib import pyplot as plt, style
-from matplotlib.colors import BoundaryNorm, ListedColormap, LinearSegmentedColormap, to_rgb
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import gaussian_kde
-
+# Standard library imports
 import sys
 from pathlib import Path
+
+# Third-party imports
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.colors import LinearSegmentedColormap, to_rgb
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+
+# Local application/library imports
 current_dir = Path(__file__).resolve().parent
 sys.path.append(str(current_dir.parent))
 
 from core import simulation
 
-def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, saveto=None):
+
+def plot_belief(out_go, out_stop, show_cnt=5, saveto=None):
     """
-    PLOS Comp Biol compliant version (V2).
-    Changes:
-    - Adds Y-axis labels ("Belief State") to ALL subplots (A, B, C, D, E).
-    - Slightly increases wspace to accommodate the new labels.
+    Generates a 2x3 composite figure illustrating the evolution of belief states 
+    (Go belief and Stop trial belief) over time across five distinct behavioral outcomes.
+    
+    Args:
+        out_go: Simulation output dictionary for Go trials.
+        out_stop: Simulation output dictionary for Stop trials.
+        show_cnt: Number of individual trial sample paths to overlay.
+        saveto: Optional filepath to save the output figure.
     """
-    # ==========================================
-    # PLOS STYLING & PALETTE
-    # ==========================================
+    
+    # Configure PLOS-compliant typography and color palette
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
@@ -38,7 +40,6 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         "legend_fontsize": 9,
         "panel_label_size": 12,
 
-        # Line Styles
         "mean_lw": 1.5,
         "mean_alpha": 1.0,
         "sem_alpha": 0.25,
@@ -59,13 +60,11 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         "survival": "gray"
     }
 
-    # ==========================================
-    # DATA PREP
-    # ==========================================
     df_go = pd.DataFrame(out_go)
     df_stop = pd.DataFrame(out_stop)
     ssd = df_stop.iloc[0]['ssd'] if len(df_stop) > 0 else None
 
+    # Categorize data by behavioral outcome
     df_gs = df_go[df_go['result'] == 'GS']
     df_ge = df_go[df_go['result'] == 'GE']
     df_gm = df_go[df_go['result'] == 'GM']
@@ -75,7 +74,7 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
     df_list = [df_gs, df_ge, df_gm, df_ss, df_se]
     condition_names = ['Go Success', 'Go Error', 'Go Missing', 'Stop Success', 'Stop Error']
 
-    # Keep figsize consistent
+    # Initialize standard journal-sized figure
     fig, ax = plt.subplots(2, 3, figsize=(7.5, 4.8))
     
     MAX_TIME_STEPS = 40
@@ -86,7 +85,6 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         row, col = divmod(i, 3)
         axis = ax[row, col]
 
-        # Add Panel Label
         axis.text(-0.25, 1.1, panel_labels[i], transform=axis.transAxes,
                   fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
 
@@ -94,9 +92,7 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
             axis.axis('off')
             continue
 
-        # -----------------------------------------------------------
-        # 1. PRE-PROCESS
-        # -----------------------------------------------------------
+        # Extract truncated belief sequences and reaction times up to the decision point
         beta_trunc_list = []
         sigma_trunc_list = []
         rt_indices = []
@@ -117,9 +113,7 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
             beta_trunc_list.append(beta_seq[:limit])
             sigma_trunc_list.append(sigma_seq[:limit])
 
-        # -----------------------------------------------------------
-        # 2. SETUP DUAL AXIS (Shadow Style Survival)
-        # -----------------------------------------------------------
+        # Configure secondary y-axis for survival probability shadow
         ax2 = axis.twinx()
         valid_rts = np.sort([r + 1 for r in rt_indices])
         
@@ -133,8 +127,6 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
                              color=colors['survival'], alpha=0.15,
                              linewidth=0) 
 
-        # Style Right Axis
-        # Note: We keep the label here for all plots to balance the new left labels
         ax2.set_ylabel('Survival Prob.', color='gray', fontsize=style['label_fontsize'])
         ax2.tick_params(axis='y', labelcolor='gray', labelsize=style['tick_fontsize'])
         ax2.set_ylim(0, 1.05) 
@@ -146,9 +138,7 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         ax2.spines['right'].set_color('gray')
         ax2.spines['right'].set_linewidth(0.5)
 
-        # -----------------------------------------------------------
-        # 3. PLOT MEANS 
-        # -----------------------------------------------------------
+        # Plot aggregate mean and standard error for belief states
         df_beta_trunc = pd.DataFrame(beta_trunc_list)
         df_sigma_trunc = pd.DataFrame(sigma_trunc_list)
 
@@ -169,9 +159,7 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         axis.fill_between(x_vals_mean, sigma_mean - sigma_sem, sigma_mean + sigma_sem,
                           color=colors["sigma"], alpha=style['sem_alpha'], linewidth=0)
 
-        # -----------------------------------------------------------
-        # 4. PLOT SAMPLES
-        # -----------------------------------------------------------
+        # Overlay individual sample paths
         subset_indices = list(range(min(show_cnt, len(df))))
         for j in subset_indices:
             d_idx = rt_indices[j]
@@ -197,10 +185,9 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
                              s=style['marker_size'], color=colors["sigma"], 
                              alpha=0.9, zorder=3, edgecolors='white', linewidth=style['marker_edge_width'])
 
-        # -----------------------------------------------------------
-        # 5. FINAL FORMATTING
-        # -----------------------------------------------------------
+        # Format subplot axes and boundaries
         if condition_names[i].startswith('Stop') and ssd is not None:
+            # Assuming a standard 12-timestep Stop Signal Duration
             axis.axvline(x=ssd + 1, color='k', linestyle='--', linewidth=style['ssd_lw'], alpha=style['ssd_alpha'])
             axis.axvline(x=ssd + 12 + 1, color='k', linestyle='--', linewidth=style['ssd_lw'], alpha=style['ssd_alpha'])
 
@@ -218,16 +205,15 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         axis.set_zorder(ax2.get_zorder() + 1) 
         axis.patch.set_visible(False)
         
-        # [MODIFIED] Always set Y-label for every plot (B, C, E included)
         axis.set_ylabel(r"Belief State", fontsize=style['label_fontsize'])
-        axis.set_xlabel("Time ", fontsize=style['label_fontsize'])
+        axis.set_xlabel("Time", fontsize=style['label_fontsize'])
 
     ax[1, 2].axis("off")
     
-    # [MODIFIED] Increased wspace 0.4 -> 0.55 to allow space for internal Y-labels
+    # Increase horizontal space to accommodate internal Y-labels
     plt.subplots_adjust(hspace=0.5, wspace=0.55, top=0.88, bottom=0.12, left=0.08, right=0.92)
 
-    # Legend
+    # Construct global legend
     legend_handles = [
         Line2D([0], [0], color=colors["beta"], lw=style['mean_lw'], label=r'Go Belief $\beta^\nu_t$'),
         Line2D([0], [0], color=colors["sigma"], lw=style['mean_lw'], label=r'Stop Trial Belief $\sigma^\nu_t$'),
@@ -251,14 +237,19 @@ def plot_simu_trial_batch_belief_5conditions(out_go, out_stop, show_cnt=5, savet
         plt.show()
 
 
-def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5, saveto=None):
+def plot_action_value(out_go, out_stop, show_cnt=5, saveto=None):
     """
-    PLOS Comp Biol compliant version (V2) - Action Values.
-    Matches style of plot_simu_trial_batch_belief_5conditions.
+    Generates a 2x3 composite figure illustrating the action values Q(b, a) 
+    over time across five distinct behavioral outcomes.
+    
+    Args:
+        out_go: Simulation output dictionary for Go trials.
+        out_stop: Simulation output dictionary for Stop trials.
+        show_cnt: Number of individual trial sample paths to overlay.
+        saveto: Optional filepath to save the output figure.
     """
-    # ==========================================
-    # PLOS STYLING & PALETTE
-    # ==========================================
+    
+    # Configure PLOS-compliant typography and color palette
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
@@ -269,7 +260,6 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
         "legend_fontsize": 9,
         "panel_label_size": 12,
 
-        # Line Styles
         "mean_lw": 1.5,
         "mean_alpha": 1.0,
         "sem_alpha": 0.25,
@@ -291,14 +281,11 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
         "survival": "gray"
     }
 
-    # ==========================================
-    # DATA PREP
-    # ==========================================
     df_go = pd.DataFrame(out_go)
     df_stop = pd.DataFrame(out_stop)
     ssd = df_stop.iloc[0]['ssd'] if len(df_stop) > 0 else None
 
-    # Filter by result type
+    # Categorize data by behavioral outcome
     df_gs = df_go[df_go['result'] == 'GS']
     df_ge = df_go[df_go['result'] == 'GE']
     df_gm = df_go[df_go['result'] == 'GM']
@@ -308,7 +295,7 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
     df_list = [df_gs, df_ge, df_gm, df_ss, df_se]
     condition_names = ['Go Success', 'Go Error', 'Go Missing', 'Stop Success', 'Stop Error']
 
-    # Standard Journal Size
+    # Initialize standard journal-sized figure
     fig, ax = plt.subplots(2, 3, figsize=(7.5, 4.8))
     
     MAX_TIME_STEPS = 40
@@ -319,7 +306,6 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
         row, col = divmod(i, 3)
         axis = ax[row, col]
 
-        # Add Panel Label
         axis.text(-0.25, 1.1, panel_labels[i], transform=axis.transAxes,
                   fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
 
@@ -327,9 +313,7 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
             axis.axis('off')
             continue
 
-        # -----------------------------------------------------------
-        # 1. PRE-PROCESS: Extract Truncated Sequences & RTs
-        # -----------------------------------------------------------
+        # Extract truncated action value sequences and reaction times up to the decision point
         q_l_trunc_list = []
         q_r_trunc_list = []
         q_w_trunc_list = []
@@ -354,9 +338,7 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
             q_r_trunc_list.append(qr_seq[:limit])
             q_w_trunc_list.append(qw_seq[:limit])
 
-        # -----------------------------------------------------------
-        # 2. SETUP DUAL AXIS (Shadow Style Survival)
-        # -----------------------------------------------------------
+        # Configure secondary y-axis for survival probability shadow
         ax2 = axis.twinx()
         valid_rts = np.sort([r + 1 for r in rt_indices])
         
@@ -366,12 +348,10 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
             x_surv_plot = np.concatenate(([1], valid_rts))
             y_surv_plot = np.concatenate(([1.0], y_survival))
             
-            # Shadow Area
             ax2.fill_between(x_surv_plot, y_surv_plot, step='post', 
                              color=colors['survival'], alpha=0.15,
                              linewidth=0) 
 
-        # Style Right Axis
         ax2.set_ylabel('Survival Prob.', color='gray', fontsize=style['label_fontsize'])
         ax2.tick_params(axis='y', labelcolor='gray', labelsize=style['tick_fontsize'])
         ax2.set_ylim(0, 1.05) 
@@ -383,14 +363,13 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
         ax2.spines['right'].set_color('gray')
         ax2.spines['right'].set_linewidth(0.5)
 
-        # -----------------------------------------------------------
-        # 3. PLOT MEANS 
-        # -----------------------------------------------------------
+        # Plot aggregate mean and standard error for action values
         df_ql = pd.DataFrame(q_l_trunc_list)
         df_qr = pd.DataFrame(q_r_trunc_list)
         df_qw = pd.DataFrame(q_w_trunc_list)
 
         def plot_mean_with_sem(data_df, color):
+            """Helper to compute and plot the mean sequence with SEM shading."""
             mean = data_df.mean(axis=0)
             sem = data_df.sem(axis=0)
             x_vals = np.arange(1, len(mean) + 1)
@@ -399,14 +378,12 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
             axis.fill_between(x_vals, mean - sem, mean + sem,
                               color=color, alpha=style['sem_alpha'], linewidth=0)
 
-        # Plot Order: Wait first (background), then Actions
+        # Layer order: Wait action (background), then active choices
         plot_mean_with_sem(df_qw, colors["Q_W"])
         plot_mean_with_sem(df_ql, colors["Q_L"])
         plot_mean_with_sem(df_qr, colors["Q_R"])
 
-        # -----------------------------------------------------------
-        # 4. PLOT SAMPLES
-        # -----------------------------------------------------------
+        # Overlay individual sample paths
         subset_indices = list(range(min(show_cnt, len(df))))
         for j in subset_indices:
             d_idx = rt_indices[j]
@@ -420,6 +397,7 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
             is_last_step = (d_idx >= MAX_TIME_STEPS - 1)
 
             def plot_sample(seq, color):
+                """Helper to plot individual trial traces and decision markers."""
                 axis.plot(x_sample, seq[:limit],
                           color=color, linewidth=style['sample_active_lw'], 
                           alpha=style['sample_active_alpha'])
@@ -432,15 +410,13 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
             plot_sample(ql_seq, colors["Q_L"])
             plot_sample(qr_seq, colors["Q_R"])
 
-        # -----------------------------------------------------------
-        # 5. FINAL FORMATTING
-        # -----------------------------------------------------------
+        # Format subplot axes and boundaries
         if condition_names[i].startswith('Stop') and ssd is not None:
+            # Assuming a standard 12-timestep Stop Signal Duration
             axis.axvline(x=ssd + 1, color='k', linestyle='--', linewidth=style['ssd_lw'], alpha=style['ssd_alpha'])
             axis.axvline(x=ssd + 12 + 1, color='k', linestyle='--', linewidth=style['ssd_lw'], alpha=style['ssd_alpha'])
 
         axis.set_xlim(1, MAX_TIME_STEPS)
-        # axis.set_ylim(bottom=0) # Optional: Un-comment if strictly positive
         axis.set_xticks(xticks)
         
         axis.set_title(f"{condition_names[i]}", pad=6, fontsize=style['title_fontsize'], fontweight='regular')
@@ -457,12 +433,9 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
 
     ax[1, 2].axis("off")
     
-    # [KEY CHANGE] wspace increased for labels
     plt.subplots_adjust(hspace=0.5, wspace=0.55, top=0.88, bottom=0.12, left=0.08, right=0.92)
 
-    # ==========================================
-    # GLOBAL LEGEND
-    # ==========================================
+    # Construct global legend
     legend_handles = [
         Line2D([0], [0], color=colors["Q_W"], lw=style['mean_lw'], label=r'$Q_t(\mathbf{b}_t,W)$'),
         Line2D([0], [0], color=colors["Q_L"], lw=style['mean_lw'], label=r'$Q_t(\mathbf{b}_t,L)$'),
@@ -487,7 +460,7 @@ def plot_simu_trial_batch_action_value_5conditions(out_go, out_stop, show_cnt=5,
         plt.show()
 
 
-def plot_composite_2x3(
+def plot_stop_prior_context(
     model,
     params: dict,
     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
@@ -498,15 +471,21 @@ def plot_composite_2x3(
     t_max=40
 ):
     """
-    PLOS Comp Biol Final V6 "Aligned Legends" Version.
-    - Colors: Forest/Sage (Beh), Burgundy (Belief), Coffee (Gap).
-    - Internal Legend: Snapped to bottom-right corner (1.0, 0.02).
-    - Global Legend: Horizontal layout text + handles, left-aligned rows.
+    Generates a 2x3 composite figure illustrating the effect of stop priors on 
+    behavioral accuracy, belief updates, and decision variables (gap) over time.
+    
+    Args:
+        model: The computational model object.
+        params: Dictionary of model parameters.
+        rates: Tuple of stop trial prior probabilities to simulate.
+        ssd: Stop signal delay for stop trials.
+        n_batch: Number of batches for timecourse simulations.
+        n_session: Number of sessions for behavioral statistic simulations.
+        saveto: Optional filepath to save the output figure.
+        t_max: Maximum timestep limit for visualization.
     """
     
-    # ==========================================
-    # 1. EARTH TONE PALETTE
-    # ==========================================
+    # Configure PLOS-compliant typography and earth-tone color palettes
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
     
@@ -515,28 +494,25 @@ def plot_composite_2x3(
         "tick_fontsize": 8,      
         "legend_fontsize": 8,    
         "panel_label_size": 12,  
-        
         "line_width": 1.0,      
         "marker_size": 3.5,        
         "cap_size": 1.5,
         "shadow_color": "gray"
     }
 
-    # Behavior: Forest & Sage
+    # Behavioral metrics palette (Neutral/Grays)
     color_acc = '#363636' 
     color_rt  = "#7f7f7f" 
     
-    # Belief: Burgundy
+    # Belief updates palette (Burgundy gradient)
     cmap_bel = LinearSegmentedColormap.from_list("earth_red", ["#E6B8B8", "#800020"]) 
     rate_colors_bel = [cmap_bel(i) for i in np.linspace(0.1, 1.0, len(rates))]
 
-    # Gap: Coffee/Bronze
+    # Action gap palette (Coffee/Bronze gradient)
     cmap_gap = LinearSegmentedColormap.from_list("earth_brown", ["#D7CCC8", "#5D4037"])
     rate_colors_gap = [cmap_gap(i) for i in np.linspace(0.1, 1.0, len(rates))]
 
-    # ==========================================
-    # 2. SIMULATION (Standard)
-    # ==========================================
+    # Helper function to truncate sequence lists and compute descriptive statistics
     def _truncate_and_collect(seq_list):
         if not seq_list: 
             return np.full(t_max, np.nan), np.full(t_max, np.nan)
@@ -552,14 +528,16 @@ def plot_composite_2x3(
     timecourse_go = []
     timecourse_stop = []
 
-    print("Simulating (V6)...")
+    print("Simulating across varying stop priors...")
+    
+    # Run model simulations across the provided prior rates
     for r_idx, r in enumerate(rates):
         p = params.copy()
         p['rate_stop_trial'] = float(r)
         m = model.__class__(**p)
         m.value_iteration_tensor()
 
-        # Behavior
+        # Simulate behavioral sessions
         out_sess = []
         for _ in range(n_session):
             is_stop = np.random.rand() < float(r)
@@ -571,7 +549,7 @@ def plot_composite_2x3(
         
         df_beh = pd.DataFrame(out_sess, columns=["result", "rt", "ssd"])
         
-        # Stats
+        # Calculate behavioral statistics for Go and Stop contexts
         go_df = df_beh[df_beh["result"].isin(["GS", "GE", "GM"])]
         if len(go_df) > 0:
             go_acc = (go_df["result"]=="GS").mean()
@@ -600,7 +578,7 @@ def plot_composite_2x3(
             "stop_rt": stop_rt, "stop_rt_sem": stop_rt_sem
         })
 
-        # Timecourse
+        # Simulate detailed timecourses for decision variables
         g_data = {"GS": {"sig": [], "gap": [], "rt": []}, 
                   "GE": {"sig": [], "gap": [], "rt": []}, 
                   "GM": {"sig": [], "gap": [], "rt": []}}
@@ -608,6 +586,7 @@ def plot_composite_2x3(
                   "SE": {"sig": [], "gap": [], "rt": []}}
 
         def process_trial_result(res_dict, store_dict):
+            """Extracts belief and value gap metrics up to the decision point."""
             out_type = res_dict["result"] 
             if out_type not in store_dict: return
             
@@ -640,7 +619,7 @@ def plot_composite_2x3(
             res_s = simulation.simu_trial(m, true_go, "stop", ssd, verbose=True)
             process_trial_result(res_s, s_data)
 
-        # Aggregate
+        # Aggregate timecourse results
         pkt_g = {
             "rate": r, 
             "color_bel": rate_colors_bel[r_idx], 
@@ -665,9 +644,7 @@ def plot_composite_2x3(
 
     df_beh_summary = pd.DataFrame(beh_rows)
 
-    # ==========================================
-    # 3. PLOTTING
-    # ==========================================    
+    # Initialize plotting layout
     fig = plt.figure(figsize=(7.5, 4.8)) 
     gs = fig.add_gridspec(2, 3, wspace=0.60, hspace=0.35)
 
@@ -682,7 +659,7 @@ def plot_composite_2x3(
     axes_time = [ax_go_bel, ax_go_gap, ax_stop_bel, ax_stop_gap]
     x_time = np.arange(1, t_max+1)
 
-    # 3.1 Shadow Axes
+    # Create shadow twin axes for survival probability overlays
     shadow_axes = {}
     for ax in axes_time:
         ax.set_zorder(1)
@@ -698,9 +675,9 @@ def plot_composite_2x3(
         ax_shad.spines['right'].set_linewidth(0.5)
         ax_shad.set_zorder(0)
         shadow_axes[ax] = ax_shad
-
     
     def draw_shadow(target_ax, rt_list, alpha):
+        """Draws the cumulative survival probability shadow based on RT distributions."""
         if not rt_list or len(rt_list) == 0: return
         try:
             valid_rts = np.sort([int(float(r)) + 1 for r in rt_list])
@@ -720,10 +697,7 @@ def plot_composite_2x3(
     rts_go = timecourse_go[mid_idx]["rts"]
     rts_stop = timecourse_stop[mid_idx]["rts"]
 
-    # --- Draw Shadows: Go Context ---
-    # GM (Miss): Very faint (background)
-    # GS (Success): Medium faint
-    # GE (Error): Darker (Highlight)
+    # Overlay survival probabilities (shadows) for Go and Stop contexts based on specific outcomes
     draw_shadow(shadow_axes[ax_go_bel], rts_go.get("GM", []), alpha=0.05)
     draw_shadow(shadow_axes[ax_go_bel], rts_go.get("GS", []), alpha=0.10)
     draw_shadow(shadow_axes[ax_go_bel], rts_go.get("GE", []), alpha=0.15)
@@ -731,17 +705,16 @@ def plot_composite_2x3(
     draw_shadow(shadow_axes[ax_go_gap], rts_go.get("GM", []), alpha=0.05)
     draw_shadow(shadow_axes[ax_go_gap], rts_go.get("GS", []), alpha=0.10)
     draw_shadow(shadow_axes[ax_go_gap], rts_go.get("GE", []), alpha=0.15)
-    # --- Draw Shadows: Stop Context ---
-    # SS (Success): Very faint
-    # SE (Error): Darker
+
     draw_shadow(shadow_axes[ax_stop_bel], rts_stop.get("SS", []), alpha=0.05)
     draw_shadow(shadow_axes[ax_stop_bel], rts_stop.get("SE", []), alpha=0.10)
     
     draw_shadow(shadow_axes[ax_stop_gap], rts_stop.get("SS", []), alpha=0.05)
     draw_shadow(shadow_axes[ax_stop_gap], rts_stop.get("SE", []), alpha=0.10)
     
-    # 3.2 Time Series
+    # Plot primary time series variables
     def plot_tc(ax, dataset, metric_prefix, outcome_keys, styles_map, color_key):
+        """Plots timecourse data with shaded standard error regions."""
         for d in dataset:
             col = d[color_key]
             for out_key in outcome_keys:
@@ -765,16 +738,14 @@ def plot_composite_2x3(
     plot_tc(ax_stop_bel, timecourse_stop, "sigma", ["SS", "SE"], st_map, "color_bel")
     plot_tc(ax_stop_gap, timecourse_stop, "gap",   ["SS", "SE"], st_map, "color_gap")
 
-    # 3.3 Behavior Panels (Bottom-Right Corner)
+    # Construct behavior summary panels (Leftmost columns)
     def plot_behavior_panel(ax, df, acc_key, acc_sem_key, rt_key, rt_sem_key, context_label):
-        # --- LEFT AXIS (Accuracy) ---
-        # 1. Line (Neutral Gray)
+        """Generates dual-axis behavioral panels (Accuracy and RT) snapped to the bottom-right legend."""
+        
+        # Plot Accuracy (Left Axis)
         ax.plot(df["rate"], df[acc_key], color=color_acc, linestyle='-', lw=style['line_width'], zorder=1)
-        # 2. Error Bars (Neutral Gray)
         ax.errorbar(df["rate"], df[acc_key], yerr=df[acc_sem_key],
                     fmt='none', ecolor=color_acc, capsize=style['cap_size'], zorder=1)
-        # 3. Markers (COLORED by Stop Prior using 'rate_colors_bel')
-        #    Using scatter to allow individual coloring
         ax.scatter(df["rate"], df[acc_key], s=20, 
                    c=rate_colors_bel, marker='o', 
                    edgecolors=color_acc, linewidth=0.5, zorder=2)
@@ -786,15 +757,11 @@ def plot_composite_2x3(
         ax.spines['left'].set_color(color_acc)
         ax.spines['top'].set_visible(False)
 
-        # --- RIGHT AXIS (RT) ---
+        # Plot RT (Right Axis)
         axR = ax.twinx()
-        # 1. Line (Neutral Gray)
         axR.plot(df["rate"], df[rt_key], color=color_rt, linestyle='-', lw=style['line_width'], zorder=1)
-        # 2. Error Bars (Neutral Gray)
         axR.errorbar(df["rate"], df[rt_key], yerr=df[rt_sem_key],
                     fmt='none', ecolor=color_rt, capsize=style['cap_size'], zorder=1)
-        # 3. Markers (COLORED by Stop Prior using 'rate_colors_gap')
-        #    Using scatter to allow individual coloring
         axR.scatter(df["rate"], df[rt_key], s=20, 
                     c=rate_colors_bel, marker='s', 
                     edgecolors=color_rt, linewidth=0.5, zorder=2)
@@ -806,8 +773,7 @@ def plot_composite_2x3(
         axR.spines['right'].set_color(color_rt)
         axR.spines['top'].set_visible(False)
         
-        # --- LEGEND ---
-        # Custom handles to show the shape and meaning, with neutral color
+        # Add localized panel legend for markers
         h_acc = Line2D([0], [0], color=color_acc, marker='o', linestyle='-', 
                        lw=style['line_width'], markersize=style['marker_size'], label=f"{context_label} Acc.")
         h_rt  = Line2D([0], [0], color=color_rt, marker='s', linestyle='-', 
@@ -821,7 +787,7 @@ def plot_composite_2x3(
     plot_behavior_panel(ax_go_beh, df_beh_summary, "go_acc", "go_acc_sem", "go_rt", "go_rt_sem", "Go")
     plot_behavior_panel(ax_stop_beh, df_beh_summary, "stop_acc", "stop_acc_sem", "stop_rt", "stop_rt_sem", "Stop")
 
-    # Formatting
+    # Apply global axis formatting and constraints
     for ax in [ax_go_beh, ax_stop_beh]:
         ax.set_xlabel(r"Stop Prior $\tilde{r}^\nu$", fontsize=style['label_fontsize'])
         ax.set_xlim(0, 1)
@@ -849,45 +815,32 @@ def plot_composite_2x3(
             ax.axvline(ssd+1, color='k', ls='--', alpha=0.5, linewidth=0.8)
             ax.axvline(ssd+1 + stop_signal_duration, color='k', ls='--', alpha=0.5, linewidth=0.8)
 
+    # Insert panel lettering
     labels = ['A', 'B', 'C', 'D', 'E', 'F']
     for ax, label in zip(axes_all, labels):
         ax.text(-0.15, 1.15, label, transform=ax.transAxes,
                 fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
 
-    # ==========================================
-    # 4. GLOBAL LEGEND (Precisely Aligned)
-    # ==========================================
-    # Y-coordinates for the two rows
-    y_row1 = 0.12  # First row (Red Belief / Go Outcome)
-    y_row2 = 0.08  # Second row (Brown Gap / Stop Outcome)
+    # Construct globally aligned bottom legend 
+    y_row1 = 0.12  
+    y_row2 = 0.08  
     
-    # --- LEFT GROUP: PRIORS ---
-    # Text label anchored at x=0.02
     fig.text(0.02, y_row1, r"Stop Prior $\tilde{r}^\nu$", ha='left', va='center', 
              fontsize=style['legend_fontsize']+1, fontweight='normal')
     
-    # 1. Handles (Red) - Row 1
-    # bbox_to_anchor x=0.14 puts the start of legend right after the text
     h_bel = [Line2D([0],[0], color=c, lw=1, label=f"{r:.2f}") for r,c in zip(rates, rate_colors_bel)]
     fig.legend(handles=h_bel, loc='center left', bbox_to_anchor=(0.12, y_row1),
                ncol=len(rates), frameon=False, fontsize=style['legend_fontsize'],
                columnspacing=0.8, handletextpad=0.4)
     
-    # 2. Handles (Brown) - Row 2
-    # Aligned exactly below Red handles (x=0.14)
     h_gap = [Line2D([0],[0], color=c, lw=1, label=f"{r:.2f}") for r,c in zip(rates, rate_colors_gap)]
     fig.legend(handles=h_gap, loc='center left', bbox_to_anchor=(0.12, y_row2),
                ncol=len(rates), frameon=False, fontsize=style['legend_fontsize'],
                columnspacing=0.8, handletextpad=0.4)
 
-
-    # --- RIGHT GROUP: OUTCOMES ---
-    # Text label anchored at x=0.55 (Middle-Right)
     fig.text(0.55, y_row1, "Outcome", ha='left', va='center', 
              fontsize=style['legend_fontsize']+1, fontweight='normal')
 
-    # 3. Handles (Go) - Row 1
-    # bbox_to_anchor x=0.64 puts it right after "Outcome" text
     h_go = [
         Line2D([0],[0], color='k', ls='-',  lw=1, label='Go Success'),
         Line2D([0],[0], color='k', ls='--', lw=1, label='Go Error'),
@@ -897,8 +850,6 @@ def plot_composite_2x3(
                ncol=3, frameon=False, fontsize=style['legend_fontsize'],
                columnspacing=1.2, handletextpad=0.5)
 
-    # 4. Handles (Stop) - Row 2
-    # Aligned exactly below Go handles (x=0.64)
     h_stop = [
         Line2D([0],[0], color='k', ls='-',  lw=1, label='Stop Success'),
         Line2D([0],[0], color='k', ls='--', lw=1, label='Stop Error'),
@@ -907,7 +858,6 @@ def plot_composite_2x3(
                ncol=2, frameon=False, fontsize=style['legend_fontsize'],
                columnspacing=1.2, handletextpad=0.5)
 
-    # Important: Adjust bottom margin to allow space for these legends
     plt.subplots_adjust(bottom=0.24, top=0.92, left=0.08, right=0.98)
 
     if saveto:
@@ -917,613 +867,48 @@ def plot_composite_2x3(
         plt.show()
 
 
-# def plot_policy_simple(model, saveto=None, dpi=300, selected_timesteps=None):
-#     """
-#     PLOS Comp Biol compliant version (V8) - Softmax / Probabilistic Policy.
-    
-#     Updates:
-#     - Plots on Beta (Y) vs Zeta (X).
-#     - X-axis label corrected to "Stop Signal Belief \zeta".
-#     - Uses Softmax probabilities based on negative costs.
-#     """
-#     # ==========================================
-#     # PLOS STYLING
-#     # ==========================================
-#     plt.rcParams['font.family'] = 'sans-serif'
-#     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
-
-#     style = {
-#         "label_fontsize": 10,
-#         "title_fontsize": 11,
-#         "tick_fontsize": 9,
-#         "legend_fontsize": 9,
-#     }
-
-#     # Define Base Colors
-#     colors = {
-#         "Q_L": "#E3B23C",  # Gold (Left)
-#         "Q_R": "#3A6EA5",  # Blue (Right)
-#         "Q_W": "#F1EFEFF3",  # White (Wait) for better visibility
-#     }
-    
-#     # Convert hex to RGB numpy arrays (0-1 range)
-#     rgb_L = np.array(to_rgb(colors["Q_L"]))
-#     rgb_R = np.array(to_rgb(colors["Q_R"]))
-#     rgb_W = np.array(to_rgb(colors["Q_W"]))
-
-#     # ==========================================
-#     # DATA PREP: CALCULATE PROBABILITIES
-#     # ==========================================
-#     # 1. Retrieve Cost Values from separate arrays
-#     # Arrays are shape [Horizon, Beta_Bins, Zeta_Bins]
-#     # We exclude the last timestep (terminal) for policy plotting usually
-#     limit = -1
-#     V_L = model.value_left[:limit, :, :]
-#     V_R = model.value_right[:limit, :, :]
-#     V_W = model.value_wait[:limit, :, :]
-    
-#     # 2. Stack into a single tensor [T, H, W, 3]
-#     # Order matches Action Space: 0=Left, 1=Right, 2=Wait
-#     # Dimensions: [Time, Beta, Zeta, Action]
-#     Costs = np.stack([V_L, V_R, V_W], axis=-1)
-    
-#     # 3. Compute Softmax Probabilities
-#     # Formula: P(a) = exp(-Cost(a) * inv_temp) / Sum(...)
-#     inv_temp = getattr(model, 'inv_temp', 1.0)
-    
-#     # Note the negative sign: We want High Prob for Low Cost
-#     logits = -Costs * inv_temp
-    
-#     # Numerical stability: subtract max per state
-#     max_logits = np.nanmax(logits, axis=-1, keepdims=True)
-#     exp_logits = np.exp(logits - max_logits)
-#     sum_exp = np.nansum(exp_logits, axis=-1, keepdims=True)
-    
-#     # Handle division by zero (if all are nan)
-#     with np.errstate(divide='ignore', invalid='ignore'):
-#         probs = exp_logits / sum_exp
-    
-#     # Fill NaNs with 0 to avoid plotting errors
-#     probs = np.nan_to_num(probs, nan=0.0)
-
-#     # 4. Create RGB Image via Linear Combination
-#     # Image = P_L * Col_L + P_R * Col_R + P_W * Col_W
-#     # Broadcast colors: [1, 1, 1, 3]
-#     img_rgb = (probs[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
-#                probs[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
-#                probs[..., 2:3] * rgb_W.reshape(1,1,1,3))
-    
-#     # Clip to ensure valid RGB range [0, 1] due to float precision
-#     img_rgb = np.clip(img_rgb, 0.0, 1.0)
-
-#     # ==========================================
-#     # PLOTTING
-#     # ==========================================
-#     num_timesteps = Costs.shape[0]
-
-#     if selected_timesteps is None:
-#         selected_timesteps = [0, 10, 20, 30]
-    
-#     # Filter valid timesteps
-#     selected_timesteps = [t for t in selected_timesteps if 0 <= t < num_timesteps]
-#     n_plots = len(selected_timesteps)
-
-#     # Figure Setup
-#     fig, axes = plt.subplots(1, n_plots, figsize=(7.5, 2.6)) 
-#     if n_plots == 1: axes = [axes]
-    
-#     for i, t in enumerate(selected_timesteps):
-#         ax = axes[i]
-        
-#         # Extract the RGB image for this timestep
-#         # shape is [Beta, Zeta, 3]
-#         matrix_plot = img_rgb[t] 
-
-#         # Plot RGB image directly
-#         # extent=[0, 1, 0, 1] maps indices to unit square
-#         # origin='lower' puts index (0,0) at bottom-left
-#         # So Y-axis is Beta (dim 0), X-axis is Zeta (dim 1)
-#         ax.imshow(matrix_plot, 
-#                   extent=[0, 1, 0, 1], origin='lower', 
-#                   interpolation='nearest', aspect='equal') 
-        
-#         ax.set_title(f"Time {t + 1}", fontsize=style['title_fontsize'], fontweight='regular', pad=8)
-        
-#         # [KEY CHANGE] Label explicitly as Zeta
-#         ax.set_xlabel(r"Stop Signal Belief $\zeta^\nu_t$", fontsize=style['label_fontsize'])
-        
-#         if i == 0:
-#             ax.set_ylabel(r"Go Belief $\beta^\nu_t$", fontsize=style['label_fontsize'])
-#         else:
-#             ax.tick_params(labelleft=False)
-
-#         ax.set_xticks([0, 0.5, 1])
-#         ax.set_yticks([0, 0.5, 1])
-#         ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'])
-        
-#         ax.spines["top"].set_visible(False)
-#         ax.spines["right"].set_visible(False)
-
-#     # ==========================================
-#     # LEGEND (Far Left)
-#     # ==========================================
-#     legend_elements = [
-#         Patch(facecolor=colors['Q_L'], edgecolor=None, label='Left'),
-#         Patch(facecolor=colors['Q_R'], edgecolor=None, label='Right'),
-#         Patch(facecolor=colors['Q_W'], edgecolor=None, label='Wait'),
-#     ]
-
-#     fig.legend(handles=legend_elements, 
-#                loc='lower left',           
-#                bbox_to_anchor=(0.08, 0.88), 
-#                ncol=3, 
-#                frameon=False, 
-#                fontsize=style['legend_fontsize'],
-#                handlelength=2.5,
-#                handletextpad=1.2, 
-#                columnspacing=2.5)
-
-#     # Adjust layout
-#     plt.subplots_adjust(top=0.82, bottom=0.18, wspace=0.35, left=0.08, right=0.95)
-
-#     if saveto:
-#         fig.savefig(saveto, dpi=dpi, bbox_inches="tight", pil_kwargs={"compression": "tiff_lzw"})
-#         plt.close(fig)
-#     else:
-#         plt.show()
-
-
-#     """
-#     Publication-quality FULL policy plot - Margin of Victory (RGB Gradient).
-    
-#     Simultaneously shows all three actions (Left, Right, Wait) and the gradient 
-#     of decision confidence (Margin of Victory over the 2nd best action).
-#     - Gold = Left preferred
-#     - Blue = Right preferred
-#     - Grey = Wait preferred
-#     - White = Decision Boundary (Gap approaching 0)
-#     """
-#     from matplotlib.colors import to_rgb
-    
-#     # ==========================================
-#     # PLOS STYLING
-#     # ==========================================
-#     plt.rcParams['font.family'] = 'sans-serif'
-#     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
-
-#     style = {
-#         "title_fontsize": 10,
-#         "label_fontsize": 12, 
-#         "tick_fontsize": 8,
-#         "legend_fontsize": 10,
-#     }
-
-#     # Base Colors (using your palette)
-#     color_L = np.array(to_rgb("#E3B23C"))  # Gold
-#     color_R = np.array(to_rgb("#3A6EA5"))  # Blue
-#     color_W = np.array(to_rgb("#7A7A7A"))  # Dark Grey (from action value plot)
-#     color_White = np.array([1.0, 1.0, 1.0])
-
-#     # ==========================================
-#     # DATA PREP: CALCULATE MARGIN OF VICTORY
-#     # ==========================================
-#     limit = -1
-#     V_L = model.value_left[:limit, :, :]
-#     V_R = model.value_right[:limit, :, :]
-#     V_W = model.value_wait[:limit, :, :]
-    
-#     # Stack costs: [Time, Beta, Zeta, Action(3)]
-#     Costs = np.stack([V_L, V_R, V_W], axis=-1)
-#     num_timesteps = Costs.shape[0]
-
-#     # 1. Identify the winning action (lowest cost)
-#     # 0 = Left, 1 = Right, 2 = Wait
-#     Winners = np.argmin(Costs, axis=-1)
-
-#     # 2. Calculate the Margin of Victory (Gap between 1st and 2nd best)
-#     Costs_sorted = np.sort(Costs, axis=-1)
-#     Best_Cost = Costs_sorted[..., 0]
-#     Second_Best_Cost = Costs_sorted[..., 1]
-    
-#     Gap = Second_Best_Cost - Best_Cost  # Always positive
-
-#     # 3. Normalize Gap to [0, 1] for Color Intensity
-#     # Use 98th percentile to prevent deadline values from washing out the gradient
-#     max_gap = np.nanpercentile(Gap, 98) 
-#     Intensity = np.clip(Gap / max_gap, 0, 1)
-
-#     # 4. Construct the RGB Image [Time, Beta, Zeta, RGB(3)]
-#     img_rgb = np.ones((*Winners.shape, 3))
-
-#     mask_L = (Winners == 0)
-#     mask_R = (Winners == 1)
-#     mask_W = (Winners == 2)
-
-#     # Linear interpolation: Color = (1 - Intensity) * White + Intensity * Target_Color
-#     for i in range(3): # For R, G, B channels
-#         img_rgb[mask_L, i] = 1 - Intensity[mask_L] * (1 - color_L[i])
-#         img_rgb[mask_R, i] = 1 - Intensity[mask_R] * (1 - color_R[i])
-#         img_rgb[mask_W, i] = 1 - Intensity[mask_W] * (1 - color_W[i])
-
-#     # ==========================================
-#     # PLOTTING LAYOUT
-#     # ==========================================
-#     cols = 8
-#     rows = (num_timesteps + cols - 1) // cols
-
-#     fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.2, rows * 1.3), dpi=dpi)
-#     axes = axes.flatten()
-
-#     for i in range(len(axes)):
-#         ax = axes[i]
-        
-#         if i < num_timesteps:
-#             # Draw the RGB composite image
-#             ax.imshow(img_rgb[i], 
-#                       extent=[0, 1, 0, 1], origin='lower', 
-#                       interpolation='nearest', aspect='equal')
-            
-#             # Titles & Formatting
-#             ax.set_title(f"Time {i+1}", fontsize=style['tick_fontsize'], pad=4)
-#             ax.set_xticks([0, 1])
-#             ax.set_yticks([0, 1])
-#             ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'], length=2)
-            
-#             ax.spines["top"].set_visible(False)
-#             ax.spines["right"].set_visible(False)
-
-#             row_idx = i // cols
-#             col_idx = i % cols
-#             if col_idx != 0: ax.set_yticklabels([])
-#             if row_idx != rows - 1: ax.set_xticklabels([])
-#         else:
-#             ax.axis("off")
-
-#     # ==========================================
-#     # GLOBAL LABELS & LEGEND
-#     # ==========================================
-#     fig.text(0.5, 0.08, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', va='center', fontsize=style['label_fontsize'])
-#     fig.text(0.08, 0.5, r"Go Belief $\beta^\nu_t$", ha='center', va='center', rotation='vertical', fontsize=style['label_fontsize'])
-
-#     # Create Custom Legend
-#     from matplotlib.patches import Patch
-#     from matplotlib.lines import Line2D
-    
-#     legend_elements = [
-#         Patch(facecolor="#E3B23C", edgecolor=None, label='Go Left Preferred'),
-#         Patch(facecolor="#3A6EA5", edgecolor=None, label='Go Right Preferred'),
-#         Patch(facecolor="#7A7A7A", edgecolor=None, label='Wait Preferred'),
-#         # Add a mock "gradient" icon using a white-to-grey line to explain the fade
-#         Line2D([0], [0], color='white', marker='s', markerfacecolor='white', markeredgecolor='black', markersize=8, label='Decision Boundary (White)')
-#     ]
-
-#     fig.legend(handles=legend_elements, 
-#                loc='lower center',            
-#                bbox_to_anchor=(0.5, 0.01), 
-#                ncol=4, 
-#                frameon=False, 
-#                fontsize=style['legend_fontsize'],
-#                handletextpad=0.5,
-#                columnspacing=1.5)
-
-#     plt.subplots_adjust(top=0.92, bottom=0.15, left=0.12, right=0.95, hspace=0.4, wspace=0.1)
-
-#     if saveto:
-#         fig.savefig(saveto, dpi=dpi, bbox_inches="tight", pil_kwargs={"compression": "tiff_lzw"})
-#         plt.close(fig)
-#     else:
-#         plt.show()
-
-
-# def plot_policy(model, saveto, dpi=300):
-#     """
-#     Publication-quality FULL policy plot (Probabilistic / Softmax Version).
-    
-#     Updates:
-#     - Renders RGB probability gradients (Softmax) instead of discrete blocks.
-#     - Uses Beta (Y) vs Zeta (X).
-#     - Consistent styling with plot_policy_simple.
-#     """
-#     # ==========================================
-#     # PLOS STYLING
-#     # ==========================================
-#     plt.rcParams['font.family'] = 'sans-serif'
-#     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
-
-#     colors = {
-#         "Q_L": "#E3B23C",  # Gold (Left)
-#         "Q_R": "#3A6EA5",  # Blue (Right)
-#         "Q_W": "#F1EFEFF3", # White/Very Light Gray (Wait)
-#     }
-    
-#     # Convert hex to RGB
-#     rgb_L = np.array(to_rgb(colors["Q_L"]))
-#     rgb_R = np.array(to_rgb(colors["Q_R"]))
-#     rgb_W = np.array(to_rgb(colors["Q_W"]))
-
-#     style = {
-#         "title_fontsize": 10,
-#         "label_fontsize": 12, 
-#         "tick_fontsize": 8,
-#         "legend_fontsize": 10,
-#     }
-
-#     # ==========================================
-#     # DATA PREP: CALCULATE PROBABILITIES
-#     # ==========================================
-#     # 1. Retrieve Costs (Time, Beta, Zeta)
-#     # Exclude terminal step
-#     limit = -1
-#     V_L = model.value_left[:limit, :, :]
-#     V_R = model.value_right[:limit, :, :]
-#     V_W = model.value_wait[:limit, :, :]
-    
-#     # Stack: [Time, Beta, Zeta, Action=3]
-#     Costs = np.stack([V_L, V_R, V_W], axis=-1)
-#     num_timesteps = Costs.shape[0]
-
-#     # 2. Compute Softmax
-#     inv_temp = getattr(model, 'inv_temp', 1.0)
-#     logits = -Costs * inv_temp
-    
-#     # Numerical stability
-#     max_logits = np.nanmax(logits, axis=-1, keepdims=True)
-#     exp_logits = np.exp(logits - max_logits)
-#     sum_exp = np.nansum(exp_logits, axis=-1, keepdims=True)
-    
-#     with np.errstate(divide='ignore', invalid='ignore'):
-#         probs = exp_logits / sum_exp
-#     probs = np.nan_to_num(probs, nan=0.0)
-
-#     # 3. Create RGB Image [Time, Beta, Zeta, 3]
-#     # Mix colors based on probability
-#     img_rgb_all = (probs[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
-#                    probs[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
-#                    probs[..., 2:3] * rgb_W.reshape(1,1,1,3))
-    
-#     img_rgb_all = np.clip(img_rgb_all, 0.0, 1.0)
-
-#     # ==========================================
-#     # PLOTTING LAYOUT
-#     # ==========================================
-#     # Grid dimensions (e.g., 8 cols)
-#     cols = 8
-#     rows = (num_timesteps + cols - 1) // cols
-
-#     # Figsize approx 1.2 inch per subplot width
-#     fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.2, rows * 1.3), dpi=dpi)
-#     axes = axes.flatten()
-
-#     for i in range(len(axes)):
-#         ax = axes[i]
-        
-#         if i < num_timesteps:
-#             # Get the RGB image for this timestep
-#             matrix_plot = img_rgb_all[i]
-
-#             # Draw RGB Image
-#             # extent=[0,1,0,1] maps to Beta/Zeta 0->1
-#             # origin='lower' puts (0,0) at bottom-left
-#             ax.imshow(matrix_plot, 
-#                       extent=[0, 1, 0, 1], origin='lower', 
-#                       interpolation='nearest', aspect='equal')
-            
-#             # Titles
-#             ax.set_title(f"Time {i+1}", fontsize=style['tick_fontsize'], pad=4)
-
-#             # Ticks & Spines
-#             ax.set_xticks([0, 1])
-#             ax.set_yticks([0, 1])
-#             ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'], length=2)
-            
-#             ax.spines["top"].set_visible(False)
-#             ax.spines["right"].set_visible(False)
-
-#             # Smart Labeling (Only edges)
-#             row_idx = i // cols
-#             col_idx = i % cols
-
-#             if col_idx != 0:
-#                 ax.set_yticklabels([])
-            
-#             # Only show X-tick labels for the bottom-most existing plots
-#             if row_idx != rows - 1:
-#                 ax.set_xticklabels([])
-
-#         else:
-#             ax.axis("off")
-
-#     # ==========================================
-#     # GLOBAL LABELS & LEGEND
-#     # ==========================================
-    
-#     # Global Axis Labels (Updated to Beta / Zeta)
-#     fig.text(0.5, 0.02, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', va='center', fontsize=style['label_fontsize'])
-#     fig.text(0.08, 0.5, r"Go Belief $\beta^\nu_t$", ha='center', va='center', rotation='vertical', fontsize=style['label_fontsize'])
-
-#     # Legend Elements
-#     legend_elements = [
-#         Patch(facecolor=colors['Q_L'], edgecolor=None, label='Go Left'),
-#         Patch(facecolor=colors['Q_R'], edgecolor=None, label='Go Right'),
-#         Patch(facecolor=colors['Q_W'], edgecolor=None, label='Wait'),
-#     ]
-
-#     # Legend Position: Far Left
-#     fig.legend(handles=legend_elements, 
-#                loc='lower left',            
-#                bbox_to_anchor=(0.12, 0.90), 
-#                ncol=4, 
-#                frameon=False, 
-#                fontsize=style['legend_fontsize'],
-#                handlelength=1.5,
-#                columnspacing=2.0)
-
-#     # Adjust layout
-#     plt.subplots_adjust(top=0.88, bottom=0.08, left=0.12, right=0.95, hspace=0.4, wspace=0.1)
-
-#     if saveto:
-#         fig.savefig(saveto, dpi=dpi, bbox_inches="tight", pil_kwargs={"compression": "tiff_lzw"})
-#         plt.close(fig)
-#     else:
-#         plt.show()
-
-
-def plot_policy_gap(model, saveto=None, dpi=300):
+def plot_policy_summary(model, out_dict, selected_timesteps, saveto=None, dpi=300, gamma=0.3):
     """
-    Publication-quality FULL policy plot - Sequential "Decision Preference".
+    Generates a publication-quality compact summary plot of the policy across selected timesteps.
     
-    Plots the action preference: Q(Wait) - min(Q(Left), Q(Right)).
-    - Deep Wait preference (Negative) -> Maps to White/Lightest color.
-    - Strong Go preference (Positive) -> Maps to Strong/Dark color.
+    Args:
+        model: The computational model containing value arrays.
+        out_dict: Dictionary containing simulation outcomes.
+        selected_timesteps: List of specific timesteps to visualize.
+        saveto: Optional filepath to save the figure.
+        dpi: Resolution for the saved figure.
+        gamma: Gamma correction factor for visual clarity of probabilities.
     """
-    # ==========================================
-    # PLOS STYLING
-    # ==========================================
+    
+    # Configure PLOS-compliant typography and color palette
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
-    style = {
-        "title_fontsize": 10,
-        "label_fontsize": 12, 
-        "tick_fontsize": 8,
-        "legend_fontsize": 10,
+    colors = {
+        "Q_L": "#E3B23C",   # Gold (Left)
+        "Q_R": "#3A6EA5",   # Blue (Right)
+        "Q_W": "#F7F7F7",   # Light Gray (Wait)
     }
     
-    # cmap_gap = LinearSegmentedColormap.from_list("earth_brown", ["#FFFFFF", "#3B1D14"])
-    # cmap_gap = LinearSegmentedColormap.from_list("earth_brown", ["#FFFFFF", "#FF7300"])
-    cmap_gap = 'Purples'
-
-
-    # ==========================================
-    # DATA PREP: CALCULATE "ACTION PREFERENCE"
-    # ==========================================
-    limit = -1
-    V_L = model.value_left[:limit, :, :]
-    V_R = model.value_right[:limit, :, :]
-    V_W = model.value_wait[:limit, :, :]
-    
-    Preference = V_W - np.minimum(V_L, V_R)
-    num_timesteps = Preference.shape[0]
-
-    vmin = np.nanpercentile(Preference, 0)   
-    vmax = np.nanpercentile(Preference, 100)  
-
-    # ==========================================
-    # PLOTTING LAYOUT
-    # ==========================================
-    cols = 8
-    rows = (num_timesteps + cols - 1) // cols
-
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.2, rows * 1.3), dpi=dpi)
-    axes = axes.flatten()
-
-    im = None
-
-    for i in range(len(axes)):
-        ax = axes[i]
-        
-        if i < num_timesteps:
-            matrix_plot = Preference[i]
-
-            im = ax.imshow(matrix_plot, 
-                           extent=[0, 1, 0, 1], origin='lower', 
-                           cmap=cmap_gap, vmin=vmin, vmax=vmax,
-                           interpolation='nearest', aspect='equal')
-            
-            ax.set_title(f"Time {i+1}", fontsize=style['tick_fontsize'], pad=4)
-
-            ax.set_xticks([0, 1])
-            ax.set_yticks([0, 1])
-            ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'], length=2)
-            
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-
-            row_idx = i // cols
-            col_idx = i % cols
-
-            if col_idx != 0:
-                ax.set_yticklabels([])
-            
-            if row_idx != rows - 1:
-                ax.set_xticklabels([])
-
-        else:
-            ax.axis("off")
-
-    # ==========================================
-    # GLOBAL LABELS & VERTICAL COLORBAR (Right Side)
-    # ==========================================
-    fig.text(0.47, 0.03, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', va='center', fontsize=style['label_fontsize'])
-    fig.text(0.04, 0.49, r"Go Belief $\beta^\nu_t$", ha='center', va='center', rotation='vertical', fontsize=style['label_fontsize'])
-
-    fig.text(0.08, 0.95, r"Action Preference  $Q(W) - \min(Q(L), Q(R))$",
-             ha='left', va='center', fontsize=style['label_fontsize'])
-
-    cbar_ax = fig.add_axes([0.88, 0.10, 0.015, 0.78]) 
-    cbar = fig.colorbar(im, cax=cbar_ax, orientation='vertical')
-    
-    cbar.set_ticks([vmin, 0, vmax])
-    cbar.set_ticklabels(['Strong Wait\nPreference', 
-                         'Decision\nBoundary\n(0)', 
-                         'Strong Go\nPreference'])
-    
-    cbar.ax.tick_params(labelsize=style['tick_fontsize'], length=0, pad=5)
-    
-    tick_labels = cbar.ax.get_yticklabels()
-    tick_labels[0].set_verticalalignment('bottom')
-    tick_labels[2].set_verticalalignment('top')
-
-    plt.subplots_adjust(top=0.88, bottom=0.10, left=0.08, right=0.86, hspace=0.45, wspace=0.1)
-
-    if saveto:
-        fig.savefig(saveto, dpi=dpi, bbox_inches="tight", pil_kwargs={"compression": "tiff_lzw"})
-        plt.close(fig)
-    else:
-        plt.show()
-
-def plot_policy_simple_combined(model, saveto=None, dpi=300, selected_timesteps=None):
-    """
-    Publication-quality COMBINED simple policy plot (2 rows x 4 cols).
-    Right-side annotation panel layout (Pixel-perfect alignment, matched heights).
-    """
-    # ==========================================
-    # PLOS STYLING
-    # ==========================================
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
+    rgb_L = np.array(to_rgb(colors["Q_L"]))
+    rgb_R = np.array(to_rgb(colors["Q_R"]))
+    rgb_W = np.array(to_rgb(colors["Q_W"]))
 
     style = {
         "title_fontsize": 11,
-        "label_fontsize": 11, 
+        "label_fontsize": 12, 
         "tick_fontsize": 9,
         "legend_fontsize": 10,
     }
 
-    # Colors
-    colors = {
-        # "Q_L": "#E3B23C",  # Gold (Left)
-        "Q_L": "#E3B23C",  # Orange (Left) - Adjusted for better contrast
-        
-        "Q_R": "#3A6EA5",  # Blue (Right)
-        "Q_W": "#E2E2E2"   # Visible Light Gray (Wait)
-    }
-    rgb_L = np.array(to_rgb(colors["Q_L"]))
-    rgb_R = np.array(to_rgb(colors["Q_R"]))
-    rgb_W = np.array(to_rgb(colors["Q_W"]))
-    
-    cmap_gap = LinearSegmentedColormap.from_list("earth_brown", ["#FFFFFF", "#3B1D14"])
-
-    # ==========================================
-    # DATA PREP
-    # ==========================================
+    # Compute action probabilities using softmax and apply gamma correction
     limit = -1
     V_L = model.value_left[:limit, :, :]
     V_R = model.value_right[:limit, :, :]
     V_W = model.value_wait[:limit, :, :]
     
-    # 1. RGB Probabilities (Row 1)
     Costs = np.stack([V_L, V_R, V_W], axis=-1)
+    
     inv_temp = getattr(model, 'inv_temp', 1.0)
     logits = -Costs * inv_temp
     
@@ -1535,261 +920,470 @@ def plot_policy_simple_combined(model, saveto=None, dpi=300, selected_timesteps=
         probs = exp_logits / sum_exp
     probs = np.nan_to_num(probs, nan=0.0)
 
-    img_rgb = (probs[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
-               probs[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
-               probs[..., 2:3] * rgb_W.reshape(1,1,1,3))
-    img_rgb = np.clip(img_rgb, 0.0, 1.0)
+    probs_vis = probs ** gamma
+    probs_vis = probs_vis / np.sum(probs_vis, axis=-1, keepdims=True)
 
-    # 2. Action Preference Gap (Row 2)
-    Preference = V_W - np.minimum(V_L, V_R)
-    vmin = np.nanpercentile(Preference, 0)
-    vmax = np.nanpercentile(Preference, 100)
+    img_rgb_all = (probs_vis[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
+                   probs_vis[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
+                   probs_vis[..., 2:3] * rgb_W.reshape(1,1,1,3))
+    img_rgb_all = np.clip(img_rgb_all, 0.0, 1.0)
 
-    if selected_timesteps is None:
-        selected_timesteps = [0, 29, 37, 39]
-    n_plots = len(selected_timesteps)
+    def get_belief_scatter(data, t):
+        """Helper to extract belief states (zeta, beta) for a given timestep."""
+        if data is None or len(data) == 0:
+            return [], []
+        betas, zetas = [], []
+        for trial in data:
+            b_seq = trial.get('beta_seq', [])
+            z_seq = trial.get('sigma_seq', [])
+            
+            rt = trial.get('rt')
+            if rt is None:
+                rt = float('inf')
+            
+            if t < len(b_seq) and t < len(z_seq) and t <= rt:
+                betas.append(b_seq[t])
+                zetas.append(z_seq[t])
+                
+        return zetas, betas
 
-    # ==========================================
-    # PLOTTING LAYOUT
-    # ==========================================
-    fig, axes = plt.subplots(2, n_plots, figsize=(8.5, 4.2), dpi=dpi)
+    def draw_right_triangle_legend(fig, rect, gamma, colors_dict, angle_deg=135):
+        """Helper to draw a rotated colormap legend with shifted axis ticks."""
+        x_orig, y_orig, w_orig, h_orig = rect
+        w_new, h_new = w_orig * 3.0, h_orig * 3.0
+        x_new, y_new = x_orig - w_orig * 1.0, y_orig - h_orig * 1.0
+        
+        ax_leg = fig.add_axes([x_new, y_new, w_new, h_new])
+        ax_leg.axis('off')
+        
+        n = 300
+        x_vals = np.linspace(-0.5, 1.5, n)
+        y_vals = np.linspace(-0.5, 1.5, n)
+        X, Y = np.meshgrid(x_vals, y_vals)
+        
+        cx, cy = 0.5, 0.5
+        theta_inv = np.deg2rad(-angle_deg)
+        c_inv, s_inv = np.cos(theta_inv), np.sin(theta_inv)
+        
+        X_orig = (X - cx) * c_inv - (Y - cy) * s_inv + cx
+        Y_orig = (X - cx) * s_inv + (Y - cy) * c_inv + cy
+        
+        V_R = X_orig
+        V_L = Y_orig
+        V_W = 1.0 - X_orig - Y_orig
+        
+        valid = (V_R >= -0.001) & (V_L >= -0.001) & (V_W >= -0.001)
+        V_R, V_L, V_W = np.clip(V_R, 0, 1), np.clip(V_L, 0, 1), np.clip(V_W, 0, 1)
+        
+        r_W = np.array(to_rgb(colors_dict["Q_W"]))
+        r_L = np.array(to_rgb(colors_dict["Q_L"]))
+        r_R = np.array(to_rgb(colors_dict["Q_R"]))
+        
+        img = np.zeros((n, n, 4))
+        img[valid, :3] = V_W[valid, None]*r_W + V_L[valid, None]*r_L + V_R[valid, None]*r_R
+        img[valid, 3] = 1.0 
+        
+        ax_leg.imshow(img, origin='lower', extent=[-0.5, 1.5, -0.5, 1.5], clip_on=False)
+        
+        def fwd_rot(px, py):
+            t = np.deg2rad(angle_deg)
+            return (px - cx) * np.cos(t) - (py - cy) * np.sin(t) + cx, \
+                   (px - cx) * np.sin(t) + (py - cy) * np.cos(t) + cy
+
+        def true_to_visual(p, g):
+            if p == 0: return 0.0
+            if p == 1: return 1.0
+            return (p**g) / (p**g + (1-p)**g)
+
+        tick_probs = [0, 0.01, 0.1, 0.5, 1.0]
+        tick_pos = [true_to_visual(p, gamma) for p in tick_probs]
+        tick_labels = ['0', '.01', '.1', '.5', '1']
+        
+        ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(1,0)), color='black', lw=1, clip_on=False)
+        ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(0,1)), color='black', lw=1, clip_on=False)
+        
+        base_pad = -0.22
+        
+        for p, lbl in zip(tick_pos, tick_labels):
+            # Go Right Axis (Top)
+            tx, ty = fwd_rot(p, 0)
+            dx, dy = fwd_rot(p, -0.04)
+            ax_leg.plot([tx, dx], [ty, dy], color='black', lw=0.8, clip_on=False)
+            
+            p_shift = p
+            if lbl == '.5':   p_shift += 0.07  
+            if lbl == '.01':  p_shift -= 0.07  
+            
+            lx, ly = fwd_rot(p_shift, base_pad)
+            ax_leg.text(lx, ly, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
+            
+            # Go Left Axis (Bottom)
+            tx2, ty2 = fwd_rot(0, p)
+            dx2, dy2 = fwd_rot(-0.04, p)
+            ax_leg.plot([tx2, dx2], [ty2, dy2], color='black', lw=0.8, clip_on=False)
+            
+            p_shift_2 = p
+            if lbl == '.5':   p_shift_2 += 0.08  
+            if lbl == '.01':  p_shift_2 -= 0.08  
+
+            lx2, ly2 = fwd_rot(base_pad, p_shift_2)
+            ax_leg.text(lx2, ly2, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
+                
+        # Placement for outer peripheral text labels
+        label_color = "#000000"
+        ax_leg.text(0.5, 2, 'Softmax Policy', ha='left', va='bottom', fontsize=10, color=label_color) 
+        ax_leg.text(0.5, 1.55, 'Go Right', ha='left', va='bottom', fontsize=9, color=label_color)   
+        ax_leg.text(0.5, -0.55, 'Go Left', ha='left', va='top', fontsize=9, color=label_color)      
+        ax_leg.text(0.27, 0.5, 'Prob.', rotation=90, ha='center', va='center', fontsize=9, color="#565555") 
+        wx, wy = fwd_rot(0, 0)
+        ax_leg.text(wx + 0.35, wy, 'Wait', ha='left', va='center', fontsize=9, color=label_color) 
+
+    # Initialize dynamic grid layout based on outcomes and selected timesteps
+    n_rows = len(out_dict)
+    n_cols = len(selected_timesteps)
+    outcome_names = list(out_dict.keys())
     
-    for i, t in enumerate(selected_timesteps):
-        # --------------------
-        # ROW 1: RGB Softmax
-        # --------------------
-        ax1 = axes[0, i]
-        ax1.imshow(img_rgb[t], extent=[0, 1, 0, 1], origin='lower', interpolation='nearest', aspect='equal')
-        
-        ax1.set_title(f"Time {t+1}", fontsize=style['title_fontsize'], pad=10)
-        ax1.set_xticks([0, 1])
-        ax1.set_yticks([0, 1])
-        ax1.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'])
-        
-        ax1.spines["top"].set_visible(False)
-        ax1.spines["right"].set_visible(False)
-        ax1.set_xticklabels([])  
-        if i > 0: ax1.set_yticklabels([])
-
-        # --------------------
-        # ROW 2: Preference Gap
-        # --------------------
-        ax2 = axes[1, i]
-        im_gap = ax2.imshow(Preference[t], extent=[0, 1, 0, 1], origin='lower', 
-                            cmap=cmap_gap, vmin=vmin, vmax=vmax, interpolation='nearest', aspect='equal')
-        
-        ax2.set_xticks([0, 1])
-        ax2.set_yticks([0, 1])
-        ax2.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'])
-        
-        ax2.spines["top"].set_visible(False)
-        ax2.spines["right"].set_visible(False)
-        if i > 0: ax2.set_yticklabels([])
-
-    # ==========================================
-    # GLOBAL AXIS LABELS
-    # ==========================================
-    plot_center_x = 0.42 # 绝对居中于子图网格
-    fig.text(plot_center_x, 0.02, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', va='center', fontsize=style['label_fontsize'])
-    fig.text(0.04, 0.5, r"Go Belief $\beta^\nu_t$", ha='center', va='center', rotation='vertical', fontsize=style['label_fontsize'])
-
-    # ==========================================
-    # RIGHT SIDEBAR ANNOTATIONS (Pixel-perfect Aligned)
-    # ==========================================
-    sidebar_x = 0.77  # 侧边栏所有元素的统一起始X坐标
-
-    # --- ROW 1 PANEL (Top Half) ---
-    fig.text(sidebar_x, 0.881, "Probabilistic Policy\n(Softmax)", va='center', ha='left', 
-             fontsize=style['label_fontsize'], fontweight='regular')
+    go_keys = ["Go Success", "Go Error", "Go Missing"]
+    stop_keys = ["Stop Success", "Stop Error"]
     
+    total_go = sum([len(out_dict[k]) for k in go_keys if k in out_dict and out_dict[k] is not None])
+    total_stop = sum([len(out_dict[k]) for k in stop_keys if k in out_dict and out_dict[k] is not None])
+    
+    fig_width = 7.5 
+    fig_height = max(4.0, n_rows * 1.5)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height), dpi=dpi)
+    
+    if n_rows == 1: axes = np.expand_dims(axes, axis=0)
+    if n_cols == 1: axes = np.expand_dims(axes, axis=1)
+
+    for r in range(n_rows):
+        out_name = outcome_names[r]
+        out_data = out_dict[out_name]
+        
+        count = len(out_data) if out_data is not None else 0
+        if out_name in go_keys:
+            pct = (count / total_go * 100) if total_go > 0 else 0
+        elif out_name in stop_keys:
+            pct = (count / total_stop * 100) if total_stop > 0 else 0
+        else:
+            pct = 0.0
+        
+        for c in range(n_cols):
+            t = selected_timesteps[c]
+            ax = axes[r, c]
+            
+            if t < Costs.shape[0]:
+                ax.imshow(img_rgb_all[t], extent=[0, 1, 0, 1], origin='lower', 
+                          interpolation='nearest', aspect='equal')
+                
+                zetas_data, betas_data = get_belief_scatter(out_data, t)
+                if zetas_data:
+                    points = np.round(np.column_stack((zetas_data, betas_data)), 4)
+                    unique_pts, counts = np.unique(points, axis=0, return_counts=True)
+                    sizes = 2 + np.log1p(counts) * 8 
+                    ax.scatter(unique_pts[:,0], unique_pts[:,1], 
+                               c='#222222', s=sizes, alpha=0.75, 
+                               edgecolors='none', zorder=10, clip_on=False)
+
+            if r == 0:
+                ax.set_title(f"Time {t+1}", fontsize=style['title_fontsize'], pad=8, fontweight='normal')
+            
+            if c == 0:
+                row_label = f"{out_name}\n({pct:.1f}%)"
+                ax.text(-0.95, 0.5, row_label, transform=ax.transAxes, 
+                        ha='center', va='center', rotation=90, 
+                        fontsize=style['label_fontsize'], fontweight='normal')
+
+            ax.set_xticks([0, 0.5, 1])
+            ax.set_yticks([0, 0.5, 1])
+            ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'], length=2)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+
+            if c != 0: ax.set_yticklabels([])
+            else: ax.set_yticklabels(['0', '0.5', '1'])
+                
+            if r != n_rows - 1: ax.set_xticklabels([])
+            else: ax.set_xticklabels(['0', '0.5', '1'])
+
+    # Add global axis labels and legend placement
+    fig.text(0.44, 0.05, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', va='center', fontsize=style['label_fontsize'])
+    fig.text(0.079, 0.5, r"Go Belief $\beta^\nu_t$", ha='center', va='center', rotation='vertical', fontsize=style['label_fontsize'])
+
+    draw_right_triangle_legend(fig, [0.7, 0.65, 0.068, 0.068], gamma, colors, angle_deg=135)
+
     legend_elements = [
-        Patch(facecolor=colors['Q_L'], edgecolor='none', label='Go Left'),
-        Patch(facecolor=colors['Q_R'], edgecolor='none', label='Go Right'),
-        Patch(facecolor=colors['Q_W'], edgecolor='none', label='Wait'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', markersize=6, alpha=0.75, 
+               label='Belief States') 
     ]
-    # 【关键修改】：去除默认 padding，确保 Patch 的左边缘精准贴合 sidebar_x
-    fig.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(sidebar_x, 0.72), 
-               frameon=False, fontsize=style['legend_fontsize'], handlelength=1.5, handletextpad=0.8,
-               borderaxespad=0., borderpad=0.)
-
-    # --- ROW 2 PANEL (Bottom Half) ---
-    # 【关键修改】：Y轴微调到0.47，避免文字碰到 Colorbar 的“Strong Go”
-    fig.text(sidebar_x, 0.47, "Action Preference\n" + r"$Q(W) - \min(Q(L), Q(R))$", 
-             va='bottom', ha='left', fontsize=style['label_fontsize'], fontweight='regular')
+    fig.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.68, 0.54), 
+               frameon=False, fontsize=style['legend_fontsize'], handletextpad=1.5)
     
-    # 【关键修改】：高度精准缩减至 0.315，以补偿 equal aspect 带来的高度折损，底部(0.12)完全齐平
-    cbar_ax = fig.add_axes([sidebar_x, 0.15, 0.015, 0.3])
-    cbar = fig.colorbar(im_gap, cax=cbar_ax, orientation='vertical')
-    
-    cbar.set_ticks([vmin, 0, vmax])
-    cbar.set_ticklabels(['Strong Wait\nPreference', 'Decision\nBoundary\n(0)', 'Strong Go\nPreference'])
-    cbar.ax.tick_params(labelsize=style['tick_fontsize'], length=0, pad=8)
-    
-    tick_labels = cbar.ax.get_yticklabels()
-    tick_labels[0].set_verticalalignment('bottom')
-    tick_labels[2].set_verticalalignment('top')
-
-    # ==========================================
-    # LAYOUT MARGINS
-    # ==========================================
-    plt.subplots_adjust(top=0.88, bottom=0.12, left=0.08, right=0.75, hspace=0.10, wspace=0.1)
+    plt.subplots_adjust(top=0.90, bottom=0.10, left=0.14, right=0.68, hspace=0.15, wspace=0.15)
 
     if saveto:
         fig.savefig(saveto, dpi=dpi, bbox_inches="tight", pil_kwargs={"compression": "tiff_lzw"})
         plt.close(fig)
     else:
         plt.show()
+        
 
-
-
-
-
-
-
-    # Hide any unused subplots
-    for j in range(i + 1, len(axes_flat)):
-        axes_flat[j].axis('off')
-
-    # ==========================================
-    # LEGEND & FINISHING
-    # ==========================================
-    from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
-    
-    legend_elements = [
-        Patch(facecolor=colors['Q_L'], label='Left'),
-        Patch(facecolor=colors['Q_R'], label='Right'),
-        Patch(facecolor=colors['Q_W'], label='Wait'),
-    ]
-    if trajectories:
-        legend_elements.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='black', 
-                                     markersize=6, alpha=0.5, label='Agent State'))
-
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.98),
-               ncol=4, frameon=False, fontsize=style['legend_fontsize'])
-
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95]) # Adjust to make room for legend
-
-    if saveto:
-        fig.savefig(saveto, dpi=dpi, bbox_inches="tight")
-        plt.close(fig)
-    else:
-        plt.show()
-
-
-def plot_policy_simple(model, saveto=None, dpi=300, selected_timesteps=None):
+def plot_policy(model, out_dict, outcome_name, saveto=None, dpi=300, gamma=0.3):
     """
-    PLOS Comp Biol compliant version (V9) - Logit-based Policy Visualization.
+    Generates a publication-quality scatter plot of the policy over time.
     
-    Updates:
-    - Uses Logits (-Cost * inv_temp) for color intensity instead of Softmax Probs.
-    - Normalizes Logits per timestep to map the "best" action to full color intensity.
+    Args:
+        model: The computational model containing value arrays.
+        out_dict: Dictionary containing simulation outcomes.
+        outcome_name: The specific outcome key to plot (e.g., 'Go Success').
+        saveto: Optional filepath to save the figure.
+        dpi: Resolution for the saved figure.
+        gamma: Gamma correction factor for visual clarity of probabilities.
     """
-    # ==========================================
-    # PLOS STYLING
-    # ==========================================
+    
+    # Configure PLOS-compliant typography and color palette
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
-    style = {
-        "label_fontsize": 10,
-        "title_fontsize": 11,
-        "tick_fontsize": 9,
-        "legend_fontsize": 9,
-    }
-
-    # Define Base Colors
     colors = {
-        "Q_L": "#E3B23C",  # Gold (Left)
-        "Q_R": "#3A6EA5",  # Blue (Right)
-        "Q_W": "#F1EFEFF3", # Off-White (Wait)
+        "Q_L": "#E3B23C",   # Gold (Left)
+        "Q_R": "#3A6EA5",   # Blue (Right)
+        "Q_W": "#F7F7F7",   # Light Gray (Wait)
     }
     
     rgb_L = np.array(to_rgb(colors["Q_L"]))
     rgb_R = np.array(to_rgb(colors["Q_R"]))
     rgb_W = np.array(to_rgb(colors["Q_W"]))
 
-    # ==========================================
-    # DATA PREP: CALCULATE LOGITS
-    # ==========================================
+    style = {
+        "title_fontsize": 10,
+        "label_fontsize": 12, 
+        "tick_fontsize": 8,
+        "legend_fontsize": 10,
+    }
+
+    # Calculate the percentage of the selected outcome relative to its trial type
+    go_keys = ["Go Success", "Go Error", "Go Missing"]
+    stop_keys = ["Stop Success", "Stop Error"]
+    
+    total_go = sum([len(out_dict[k]) for k in go_keys if k in out_dict and out_dict[k] is not None])
+    total_stop = sum([len(out_dict[k]) for k in stop_keys if k in out_dict and out_dict[k] is not None])
+    
+    out_data = out_dict.get(outcome_name, [])
+    count = len(out_data) if out_data is not None else 0
+    
+    if outcome_name in go_keys:
+        pct = (count / total_go * 100) if total_go > 0 else 0
+    elif outcome_name in stop_keys:
+        pct = (count / total_stop * 100) if total_stop > 0 else 0
+    else:
+        pct = 0.0
+
+    # Compute action probabilities using softmax and apply gamma correction
     limit = -1
     V_L = model.value_left[:limit, :, :]
     V_R = model.value_right[:limit, :, :]
     V_W = model.value_wait[:limit, :, :]
     
-    # Stack into [Time, Beta, Zeta, Action]
     Costs = np.stack([V_L, V_R, V_W], axis=-1)
-    
+    num_timesteps = Costs.shape[0]
+
     inv_temp = getattr(model, 'inv_temp', 1.0)
-    # Logits: Higher is better (lower cost)
     logits = -Costs * inv_temp
     
-    # --- Normalization for Visualization ---
-    # To map Logits to RGB, we scale them per state so the highest logit 
-    # (best action) has the most influence.
-    # Subtract the minimum logit to ensure all values are positive for the blend
-    logits_min = np.nanmin(logits, axis=-1, keepdims=True)
-    logits_shifted = logits - logits_min
+    max_logits = np.nanmax(logits, axis=-1, keepdims=True)
+    exp_logits = np.exp(logits - max_logits)
+    sum_exp = np.nansum(exp_logits, axis=-1, keepdims=True)
     
-    # Normalize by the sum of shifted logits to create mixing weights
-    sum_logits = np.nansum(logits_shifted, axis=-1, keepdims=True)
     with np.errstate(divide='ignore', invalid='ignore'):
-        weights = logits_shifted / sum_logits
-    weights = np.nan_to_num(weights, nan=0.0)
+        probs = exp_logits / sum_exp
+    probs = np.nan_to_num(probs, nan=0.0)
 
-    # 4. Create RGB Image via Linear Combination of Weights
-    img_rgb = (weights[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
-               weights[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
-               weights[..., 2:3] * rgb_W.reshape(1,1,1,3))
-    
-    img_rgb = np.clip(img_rgb, 0.0, 1.0)
+    probs_vis = probs ** gamma
+    probs_vis = probs_vis / np.sum(probs_vis, axis=-1, keepdims=True)
 
-    # ==========================================
-    # PLOTTING
-    # ==========================================
-    num_timesteps = Costs.shape[0]
-    if selected_timesteps is None:
-        selected_timesteps = [0, 10, 20, 30]
-    
-    selected_timesteps = [t for t in selected_timesteps if 0 <= t < num_timesteps]
-    n_plots = len(selected_timesteps)
+    img_rgb_all = (probs_vis[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
+                   probs_vis[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
+                   probs_vis[..., 2:3] * rgb_W.reshape(1,1,1,3))
+    img_rgb_all = np.clip(img_rgb_all, 0.0, 1.0)
 
-    fig, axes = plt.subplots(1, n_plots, figsize=(7.5, 2.6)) 
-    if n_plots == 1: axes = [axes]
+    def get_belief_scatter(data, t):
+        """Helper to extract belief states (zeta, beta) for a given timestep."""
+        if data is None or len(data) == 0:
+            return [], []
+        betas, zetas = [], []
+        for trial in data:
+            b_seq = trial.get('beta_seq', [])
+            z_seq = trial.get('sigma_seq', [])
+            
+            rt = trial.get('rt')
+            if rt is None:
+                rt = float('inf')
+            
+            if t < len(b_seq) and t < len(z_seq) and t <= rt:
+                betas.append(b_seq[t])
+                zetas.append(z_seq[t])
+                
+        return zetas, betas
+
+    def draw_right_triangle_legend(fig, rect, gamma, colors_dict, angle_deg=135):
+        """Helper to draw a rotated colormap legend for the three-way policy."""
+        x_orig, y_orig, w_orig, h_orig = rect
+        w_new, h_new = w_orig * 3.0, h_orig * 3.0
+        x_new, y_new = x_orig - w_orig * 1.0, y_orig - h_orig * 1.0
+        
+        ax_leg = fig.add_axes([x_new, y_new, w_new, h_new])
+        ax_leg.axis('off')
+        
+        n = 300
+        x_vals = np.linspace(-0.5, 1.5, n)
+        y_vals = np.linspace(-0.5, 1.5, n)
+        X, Y = np.meshgrid(x_vals, y_vals)
+        
+        cx, cy = 0.5, 0.5
+        theta_inv = np.deg2rad(-angle_deg)
+        c_inv, s_inv = np.cos(theta_inv), np.sin(theta_inv)
+        
+        X_orig = (X - cx) * c_inv - (Y - cy) * s_inv + cx
+        Y_orig = (X - cx) * s_inv + (Y - cy) * c_inv + cy
+        
+        V_R = X_orig
+        V_L = Y_orig
+        V_W = 1.0 - X_orig - Y_orig
+        
+        valid = (V_R >= -0.001) & (V_L >= -0.001) & (V_W >= -0.001)
+        V_R, V_L, V_W = np.clip(V_R, 0, 1), np.clip(V_L, 0, 1), np.clip(V_W, 0, 1)
+        
+        r_W = np.array(to_rgb(colors_dict["Q_W"]))
+        r_L = np.array(to_rgb(colors_dict["Q_L"]))
+        r_R = np.array(to_rgb(colors_dict["Q_R"]))
+        
+        img = np.zeros((n, n, 4))
+        img[valid, :3] = V_W[valid, None]*r_W + V_L[valid, None]*r_L + V_R[valid, None]*r_R
+        img[valid, 3] = 1.0 
+        
+        ax_leg.imshow(img, origin='lower', extent=[-0.5, 1.5, -0.5, 1.5], clip_on=False)
+        
+        def fwd_rot(px, py):
+            t = np.deg2rad(angle_deg)
+            return (px - cx) * np.cos(t) - (py - cy) * np.sin(t) + cx, \
+                   (px - cx) * np.sin(t) + (py - cy) * np.cos(t) + cy
+
+        def true_to_visual(p, g):
+            if p == 0: return 0.0
+            if p == 1: return 1.0
+            return (p**g) / (p**g + (1-p)**g)
+
+        tick_probs = [0, 0.01, 0.1, 0.5, 1.0]
+        tick_pos = [true_to_visual(p, gamma) for p in tick_probs]
+        tick_labels = ['0', '.01', '.1', '.5', '1']
+        
+        ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(1,0)), color='black', lw=1, clip_on=False)
+        ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(0,1)), color='black', lw=1, clip_on=False)
+        
+        base_pad = -0.22
+        
+        for p, lbl in zip(tick_pos, tick_labels):
+            tx, ty = fwd_rot(p, 0)
+            dx, dy = fwd_rot(p, -0.04)
+            ax_leg.plot([tx, dx], [ty, dy], color='black', lw=0.8, clip_on=False)
+            
+            p_shift = p
+            if lbl == '.5':   p_shift += 0.07  
+            if lbl == '.01':  p_shift -= 0.07  
+            
+            lx, ly = fwd_rot(p_shift, base_pad)
+            ax_leg.text(lx, ly, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
+            
+            tx2, ty2 = fwd_rot(0, p)
+            dx2, dy2 = fwd_rot(-0.04, p)
+            ax_leg.plot([tx2, dx2], [ty2, dy2], color='black', lw=0.8, clip_on=False)
+            
+            p_shift_2 = p
+            if lbl == '.5':   p_shift_2 += 0.08  
+            if lbl == '.01':  p_shift_2 -= 0.08  
+
+            lx2, ly2 = fwd_rot(base_pad, p_shift_2)
+            ax_leg.text(lx2, ly2, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
+                
+        label_color = "#000000"
+        offset_right = 0.4
+        
+        gx_r, gy_r = fwd_rot(1, 0)
+        ax_leg.text(gx_r + offset_right, gy_r + 0.15, 'Go Right', ha='left', va='center', fontsize=9, color=label_color)
+        
+        gx_l, gy_l = fwd_rot(0, 1)
+        ax_leg.text(gx_l + offset_right, gy_l - 0.15, 'Go Left', ha='left', va='center', fontsize=9, color=label_color)
+        
+        wx, wy = fwd_rot(0, 0)
+        ax_leg.text(wx + offset_right, wy, 'Wait', ha='left', va='center', fontsize=9, color=label_color) 
+        
+        ax_leg.text(0.27, 0.5, 'Prob.', rotation=90, ha='center', va='center', fontsize=9, color="#565555") 
+
+    # Initialize grid layout for timesteps
+    cols = 8
+    rows = (num_timesteps + cols - 1) // cols
     
-    for i, t in enumerate(selected_timesteps):
+    fig_width = cols * 1.2
+    fig_height = rows * 1.3 + 1.8  
+    fig, axes = plt.subplots(rows, cols, figsize=(fig_width, fig_height), dpi=dpi)
+    axes = axes.flatten()
+
+    for i in range(len(axes)):
         ax = axes[i]
-        ax.imshow(img_rgb[t], extent=[0, 1, 0, 1], origin='lower', 
-                  interpolation='nearest', aspect='equal') 
         
-        ax.set_title(f"Time {t + 1}", fontsize=style['title_fontsize'], pad=8)
-        ax.set_xlabel(r"Stop Signal Belief $\zeta^\nu_t$", fontsize=style['label_fontsize'])
-        
-        if i == 0:
-            ax.set_ylabel(r"Go Belief $\beta^\nu_t$", fontsize=style['label_fontsize'])
+        if i < num_timesteps:
+            ax.imshow(img_rgb_all[i], extent=[0, 1, 0, 1], origin='lower', 
+                      interpolation='nearest', aspect='equal')
+            
+            zetas_data, betas_data = get_belief_scatter(out_data, i)
+            if zetas_data:
+                points = np.round(np.column_stack((zetas_data, betas_data)), 4)
+                unique_pts, counts = np.unique(points, axis=0, return_counts=True)
+                
+                sizes = 2 + np.log1p(counts) * 6
+                ax.scatter(unique_pts[:,0], unique_pts[:,1], 
+                           c='#222222', s=sizes, alpha=0.75, 
+                           edgecolors='none', zorder=10, clip_on=False)
+
+            ax.set_title(f"Time {i+1}", fontsize=style['tick_fontsize'], pad=4)
+            
+            ax.set_xticks([0, 0.5, 1])
+            ax.set_xticklabels(['0', '0.5', '1'])
+            ax.set_yticks([0, 0.5, 1])
+            ax.set_yticklabels(['0', '0.5', '1'])
+            ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'], length=2)
+            
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+
+            row_idx = i // cols
+            col_idx = i % cols
+            if col_idx != 0: ax.set_yticklabels([])
+            if row_idx != rows - 1: ax.set_xticklabels([])
         else:
-            ax.tick_params(labelleft=False)
+            ax.axis("off")
 
-        ax.set_xticks([0, 0.5, 1])
-        ax.set_yticks([0, 0.5, 1])
-        ax.tick_params(axis='both', which='major', labelsize=style['tick_fontsize'])
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
+    # Add global axis labels and legend placement
+    fig.text(0.5, 0.02, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', va='center', fontsize=style['label_fontsize'])
+    fig.text(0.04, 0.5, r"Go Belief $\beta^\nu_t$", ha='center', va='center', rotation='vertical', fontsize=style['label_fontsize'])
 
-    # ==========================================
-    # LEGEND
-    # ==========================================
+    base_y = 0.81
+    leg_w = 0.05
+    leg_h = leg_w * (fig_width / fig_height)
+    
+    draw_right_triangle_legend(fig, [0.1, base_y - leg_h/2, leg_w, leg_h], gamma, colors, angle_deg=135)
+    fig.text(0.27, base_y, 'Softmax Policy', ha='left', va='center', fontsize=10, color='#000000')
+
+    label_str = f'Belief States ({outcome_name}, {pct:.1f}%)'
     legend_elements = [
-        Patch(facecolor=colors['Q_L'], label='Left'),
-        Patch(facecolor=colors['Q_R'], label='Right'),
-        Patch(facecolor=colors['Q_W'], label='Wait'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', markersize=6, alpha=0.75, 
+               label=label_str)
     ]
+    fig.legend(handles=legend_elements, loc='center', bbox_to_anchor=(0.58, base_y), 
+               frameon=False, fontsize=style['legend_fontsize'])
 
-    fig.legend(handles=legend_elements, loc='lower left', bbox_to_anchor=(0.08, 0.88), 
-               ncol=3, frameon=False, fontsize=style['legend_fontsize'],
-               handlelength=2.5, handletextpad=1.2, columnspacing=2.5)
-
-    plt.subplots_adjust(top=0.82, bottom=0.18, wspace=0.35, left=0.08, right=0.95)
+    plt.subplots_adjust(top=0.68, bottom=0.08, left=0.08, right=0.95, hspace=0.45, wspace=0.15)
 
     if saveto:
         fig.savefig(saveto, dpi=dpi, bbox_inches="tight", pil_kwargs={"compression": "tiff_lzw"})
@@ -1798,125 +1392,5 @@ def plot_policy_simple(model, saveto=None, dpi=300, selected_timesteps=None):
         plt.show()
 
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgb
-from matplotlib.patches import Patch
-from matplotlib.lines import Line2D
-
-def plot_policy_with_trajectories(model, samples_go=None, samples_stop=None, saveto=None, dpi=300):
-    """
-    全量策略图 + 模拟信念轨迹叠加。
-    
-    参数:
-    - model: POMDP 模型实例。
-    - samples_go: simulation.simu_trial_batch 的 Go 试次输出。
-    - samples_stop: simulation.simu_trial_batch 的 Stop 试次输出。
-    """
-    # ==========================================
-    # 1. 样式与颜色设置
-    # ==========================================
-    plt.rcParams['font.family'] = 'sans-serif'
-    plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
-
-    colors = {
-        "Q_L": "#E3B23C",    # Go Left (金)
-        "Q_R": "#3A6EA5",    # Go Right (蓝)
-        "Q_W": "#F1EFEFF3",   # Wait (灰)
-        "dot_go": "black",    # Go 试次的信念点颜色
-        "dot_stop": "#800020" # Stop 试次的信念点颜色 (酒红)
-    }
-    rgb_L, rgb_R, rgb_W = np.array(to_rgb(colors["Q_L"])), np.array(to_rgb(colors["Q_R"])), np.array(to_rgb(colors["Q_W"]))
-
-    # ==========================================
-    # 2. 策略数据计算 (背景)
-    # ==========================================
-    limit = -1
-    V_L, V_R, V_W = model.value_left[:limit, :, :], model.value_right[:limit, :, :], model.value_wait[:limit, :, :]
-    Costs = np.stack([V_L, V_R, V_W], axis=-1)
-    num_timesteps = Costs.shape[0]
-    inv_temp = getattr(model, 'inv_temp', 1.0)
-    logits = -Costs * inv_temp
-    
-    # 计算背景权重
-    logits_min = np.nanmin(logits, axis=-1, keepdims=True)
-    logits_shifted = logits - logits_min
-    weights = np.nan_to_num(logits_shifted / np.nansum(logits_shifted, axis=-1, keepdims=True), nan=0.0)
-    img_rgb_all = np.clip((weights[..., 0:1] * rgb_L.reshape(1,1,1,3) + 
-                           weights[..., 1:2] * rgb_R.reshape(1,1,1,3) + 
-                           weights[..., 2:3] * rgb_W.reshape(1,1,1,3)), 0, 1)
-
-    # 等高线数据
-    max_logits = np.nanmax(logits, axis=-1, keepdims=True)
-    exp_logits = np.exp(logits - max_logits)
-    probs = np.nan_to_num(exp_logits / np.nansum(exp_logits, axis=-1, keepdims=True), nan=0.0)
-    wait_prob_all = probs[..., 2]
-
-    # ==========================================
-    # 3. 绘图网格 (8列 x 5行)
-    # ==========================================
-    cols = 8
-    rows = (num_timesteps + cols - 1) // cols
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.3, rows * 1.4), dpi=dpi)
-    axes_flat = axes.flatten()
-
-    for i in range(len(axes_flat)):
-        ax = axes_flat[i]
-        if i < num_timesteps:
-            # A. 绘制策略地图背景
-            # ax.imshow(img_rgb_all[i], extent=[0, 1, 0, 1], origin='lower', 
-            #           interpolation='nearest', aspect='equal', alpha=0.7)
-            
-            # B. 叠加 P(Wait) 等高线 (辅助线)
-            ny, nx = wait_prob_all[i].shape
-            X, Y = np.meshgrid(np.linspace(0, 1, nx), np.linspace(0, 1, ny))
-            ax.contour(X, Y, wait_prob_all[i], levels=[0.5, 0.99], 
-                       colors='k', linewidths=0.2, alpha=0.2)
-            
-            # C. 叠加当前时间步 t=i 的所有模拟信念点
-            # 叠加 Go 试次点
-            if samples_go is not None:
-                for trial in samples_go:
-                    if i < len(trial['beta_seq']):
-                        ax.scatter(trial['sigma_seq'][i], trial['beta_seq'][i], 
-                                   s=2, color=colors["dot_go"], alpha=0.5, zorder=5)
-            
-            # 叠加 Stop 试次点
-            if samples_stop is not None:
-                for trial in samples_stop:
-                    if i < len(trial['beta_seq']):
-                        ax.scatter(trial['sigma_seq'][i], trial['beta_seq'][i], 
-                                   s=2, color=colors["dot_stop"], alpha=0.6, zorder=6)
-
-            # 细节美化
-            ax.set_title(f"T {i+1}", fontsize=8)
-            ax.set_xticks([0, 1]); ax.set_yticks([0, 1])
-            ax.tick_params(axis='both', labelsize=7)
-            if i % cols != 0: ax.set_yticklabels([])
-            if i // cols != rows - 1: ax.set_xticklabels([])
-        else:
-            ax.axis("off")
-
-    # 全局标签与图例
-    fig.text(0.5, 0.02, r"Stop Signal Belief $\zeta^\nu_t$", ha='center', fontsize=12)
-    fig.text(0.06, 0.5, r"Go Belief $\beta^\nu_t$", ha='center', rotation='vertical', fontsize=12)
-
-    legend_elements = [
-        Patch(facecolor=colors['Q_L'], label='Go Left Pref.'),
-        Patch(facecolor=colors['Q_R'], label='Go Right Pref.'),
-        Patch(facecolor=colors['Q_W'], label='Wait Pref.'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor=colors['dot_go'], label='Go Trial States'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor=colors['dot_stop'], label='Stop Trial States'),
-    ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.98), 
-               ncol=5, frameon=False, fontsize=10)
-
-    plt.subplots_adjust(top=0.92, bottom=0.08, left=0.1, right=0.95, hspace=0.4, wspace=0.2)
-
-    if saveto:
-        fig.savefig(saveto, dpi=dpi, bbox_inches="tight")
-        plt.close(fig)
-    else:
-        plt.show()
 
 

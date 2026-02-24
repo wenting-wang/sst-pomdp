@@ -3,7 +3,7 @@ import torch
 import sys
 
 print("-" * 60)
-print("🔍 SLURM GPU DEBUGGER")
+print("SLURM GPU DEBUGGER")
 print("-" * 60)
 
 # 1. Check Important Environment Variables

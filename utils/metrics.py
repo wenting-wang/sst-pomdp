@@ -1,20 +1,38 @@
+"""
+metrics.py
+
+Performance, Sequential, and Discrepancy Metrics for the Stop-Signal Task (SST).
+
+This module contains functions to calculate comprehensive behavioral statistics 
+from both observed (real) and simulated SST data. It includes basic accuracy 
+metrics, temporal dependencies (e.g., Post-Error Slowing), regression slopes, 
+and distance metrics used for Posterior Predictive Checks (PPC).
+"""
 import numpy as np
 import pandas as pd
 from scipy.stats import wasserstein_distance, linregress
 import warnings
 
-# Suppress runtime warnings often caused by division by zero in empty categories
+# Suppress runtime warnings often caused by division by zero in empty categories 
+# (e.g., when a subject has no Stop Errors).
 warnings.simplefilter("ignore", RuntimeWarning)
 
-# --- 1. Basic Helpers ---
+
+# BASIC PERFORMANCE METRICS
 
 def get_percentage(df):
     """
-    Computes proportions of response types:
-    - GS: Go Success
-    - GE: Go Error
-    - GM: Go Miss
-    - SS: Stop Success
+    Computes the proportions of the four primary SST response types.
+    
+    Response Types:
+      - GS: Go Success (Correct Go direction)
+      - GE: Go Error (Incorrect Go direction)
+      - GM: Go Missing (Failed to respond to Go)
+      - SS: Stop Success (Successfully inhibited)
+      - SE: Stop Error (Failed to inhibit)
+      
+    Returns:
+        tuple: (perc_gs, perc_ge, perc_gm, perc_ss)
     """
     stats = df['result'].value_counts()
     n_gs = stats.get("GS", 0)
@@ -34,19 +52,27 @@ def get_percentage(df):
     return perc_gs, perc_ge, perc_gm, perc_ss
 
 
-# --- 2. Sequential & Temporal Metrics (NEW!) ---
+# SEQUENTIAL & TEMPORAL METRICS
 
 def get_sequential_stats(df, rt_col='rt_real'):
     """
-    Computes sequential dependencies and global trends.
-    Assumes df is sorted by trial order.
+    Computes sequential dependencies and global temporal trends.
+    Assumes the dataframe is strictly sorted by trial order.
     
-    Metrics:
-    - pes: Post-Error Slowing (Go RT after Stop Error - Go RT after Go Success)
-    - pss: Post-Stop Slowing (Go RT after Stop Success - Go RT after Go Success)
-    - rt_acf_1: Lag-1 Autocorrelation of Go RTs (Short-term dependency)
-    - rt_acf_2: Lag-2 Autocorrelation of Go RTs
-    - rt_slope: Global RT trend (Fatigue/Practice effect)
+    Metrics Calculated:
+      - pes: Post-Error Slowing (Go RT after Stop Error - Go RT after Go Success)
+      - pss: Post-Stop Slowing (Go RT after Stop Success - Go RT after Go Success)
+      - pges: Post-Go Error Slowing (Go RT after Go Error - Go RT after Go Success)
+      - rt_acf_1: Lag-1 Autocorrelation of Go RTs (Short-term dependency)
+      - rt_acf_2: Lag-2 Autocorrelation of Go RTs
+      - slope: Global RT trend indicating fatigue or practice effects
+      
+    Args:
+        df (pd.DataFrame): Trial data.
+        rt_col (str): Column name containing the reaction times.
+        
+    Returns:
+        tuple: (pes, pss, pges, rt_acf_1, rt_acf_2, slope)
     """
     try:
         # Create shifted columns for previous trial info
@@ -97,7 +123,7 @@ def get_sequential_stats(df, rt_col='rt_real'):
         # Fail gracefully if columns missing or data too sparse
         return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
-# --- 3. Distance Metrics (Observed vs Simulated) ---
+# DISTANCE METRICS (OBSERVED VS. SIMULATED)
 
 def get_distance(df_obs, df_sim):
     """
@@ -167,7 +193,7 @@ def get_dis_ssd_mean(df_obs, df_sim):
     return abs(obs.mean() - sim.mean())
 
 
-# --- 4. Descriptive Statistics (Analysis) ---
+# DESCRIPTIVE STATISTICS (ANALYSIS)
 
 def get_stats_mean(df):
     """
@@ -215,7 +241,7 @@ def get_stats_mean_sim(df):
             pes, pss, pges, acf1, acf2, slope)
 
 
-# --- 5. Regression / Slope Helpers ---
+# REGRESSION / SLOPE HELPERS
 
 def get_rate_perc_ss_ssd(df):
     try:

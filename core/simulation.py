@@ -2,8 +2,24 @@ import numpy as np
 
 
 def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
+    """
+    Simulate a single trial of the Stop Signal Task (SST).
+
+    Args:
+        model: The computational model (pomdp).
+        true_go_state (str): The direction of the go cue ('left' or 'right').
+        true_stop_state (str): The type of trial ('nonstop' or 'stop').
+        ssd (int or None): The stop signal delay in time steps (required for stop trials).
+        verbose (bool): If True, returns detailed sequences of beliefs and values.
+
+    Returns:
+        dict or tuple: A dictionary of detailed trial sequences if verbose is True, 
+        otherwise a tuple containing (result, reaction_time, ssd).
+    """
     def generate_obs_sequences(true_go_state, true_stop_state, ssd):
-        if true_stop_state == 'stop': # stop trial
+        """Generate observation sequences for go and stop signals."""
+        # Stop trial
+        if true_stop_state == 'stop':
             if ssd is None or np.isnan(ssd):
                 raise ValueError("SSD must be specified for stop trials.")
             ssd = int(ssd)
@@ -20,7 +36,8 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
             x_on_post = np.random.choice(
                 [0, 1, 2], horizon - ssd, p=p_x_z1)
             x_seq = np.concatenate((x_pre, x_on_post))
-        elif true_stop_state == 'nonstop': # go trial
+        # Go trial
+        elif true_stop_state == 'nonstop':
             if ssd is not None and not np.isnan(ssd):
                 raise ValueError("SSD must be None or NaN for go trials.")
 
@@ -31,6 +48,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
         return x_seq, y_seq, ssd
 
     def get_action_and_qvals(beta, zeta, t_step):
+        """Retrieve Q-values and select an action using a softmax policy."""
         beta_idx = np.searchsorted(model.beta_space, beta, side="left")
         zeta_idx = np.searchsorted(model.zeta_space, zeta, side="left")
         idx = (t_step, beta_idx, zeta_idx)
@@ -39,7 +57,9 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
         v_right = model.value_right[idx]
         v_wait = model.value_wait[idx]
 
-        # softmax action selection
+        # Softmax action selection
+        # Q-values are treated as costs; lower values are more favorable. 
+        # Hence, we negate them for the softmax.
         q_vals = np.array([v_left, v_right, v_wait])
         q_vals = -q_vals  # cost
         q_vals -= np.max(q_vals)
@@ -51,7 +71,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
 
     # --- Constants ---
     horizon = model.horizon
-    mu = 12  # stop signal duration in time steps
+    mu = 12 # Stop signal duration in time steps
     x_seq, y_seq, ssd = generate_obs_sequences(
         true_go_state, true_stop_state, ssd)
 
@@ -112,6 +132,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
     # --- Output ---
     if verbose:
         return {
+            'result': result,
             'true_go_state': true_go_state,
             'true_stop_state': true_stop_state,
             'ssd': ssd,
@@ -123,7 +144,6 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
             'value_right_seq': value_right_seq,
             'value_wait_seq': value_wait_seq,
             'policy_seq': policy_seq,
-            'result': result,
             'rt': rt
         }
     else:
@@ -131,18 +151,19 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
 
 def simu_trial_batch(model, true_go_state, true_stop_state, ssd, batch_size, verbose=False):
     """
-    Simulate multiple repeated Stop Signal Task (SST) trials under identical conditions.
+    Simulate a batch of Stop Signal Task (SST) trials under identical conditions.
 
-    Parameters:
-    - true_go_state (str): Direction of the go signal ('left' or 'right').
-    - true_stop_state (str): Trial type ('nonstop' or 'stop').
-    - ssd (int or None): Stop-signal delay (only required for stop trials).
-    - batch_size (int): Number of trials to simulate.
-    - verbose (bool): If True, returns full belief and value traces per trial.
+    Args:
+        model: The computational model (pomdp).
+        true_go_state (str): The direction of the go signal ('left' or 'right').
+        true_stop_state (str): The type of trial ('nonstop' or 'stop').
+        ssd (int or None): The stop signal delay.
+        batch_size (int): The number of trials to simulate.
+        verbose (bool): If True, returns full belief and value traces per trial.
 
     Returns:
-    - list: If verbose=False: list of (result, rt, ssd) tuples.
-            If verbose=True: list of detailed dicts for each trial (see `simu_trial`).
+        list: A list of outcomes. If verbose=False, returns a list of (result, rt, ssd) tuples.
+        If verbose=True, returns a list of detailed dictionaries per trial.
     """
     trials = [
         simu_trial(model, true_go_state, true_stop_state,
@@ -151,19 +172,25 @@ def simu_trial_batch(model, true_go_state, true_stop_state, ssd, batch_size, ver
     ]
     return trials
 
-def simu_task(model):
+def simu_task(model, verbose=False):
     """
-    Simulate a full SST session consisting of 360 trials, including dynamic SSD staircase adjustment.
+    Simulate a full SST session of 360 trials with dynamic SSD staircase adjustment.
 
-    Stop trials occur with base probability (1/6). The SSD (stop-signal delay) is updated only
-    after stop trials, based on performance:
+    Stop trials occur with a base stop prior probability of 1/6, as in the ABCD SST design:
+    - 60 Stop trials (1/6 of 360)
+    - 300 Go trials (5/6 of 360)
+    The trial type is randomly determined for each trial.
+    The stop signal delay (SSD) is updated only after stop trials based on performance:
+    - Increases by 2 steps if the previous stop trial was a Stop Success ('SS').
+    - Decreases by 2 steps if the previous stop trial was a Stop Error ('SE').
+    - Constrained between 2 and 34 steps. i.e. 50ms to 850ms in the ABCD SST design.
 
-    - If previous stop trial was 'SS' (stop success), SSD increases by 2 steps (50ms).
-    - If previous stop trial was 'SE' (stop error), SSD decreases by 2 steps.
-    - SSD is constrained between 2 and 36 steps (50ms - 900ms).
+    Args:
+        model: The computational model containing parameters.
+        verbose (bool): If True, returns detailed data for each trial.
 
     Returns:
-    - list of tuples: Each trial as (result, rt, ssd)
+        list: A list of trial outcomes, each formatted as a (result, rt, ssd) tuple.
     """
     n_trial = 360
     outcomes = []
@@ -188,11 +215,10 @@ def simu_task(model):
         else:
             ssd = None
 
-        trial_outcome = simu_trial(model,
-            true_go_state, true_stop_state, ssd)
+        trial_outcome = simu_trial(model, true_go_state, true_stop_state, ssd, verbose=verbose)
         outcomes.append(trial_outcome)
 
         if true_stop_state == 'stop':
-            last_stop_result = trial_outcome[0]
+            last_stop_result = trial_outcome[0] # result
 
     return outcomes

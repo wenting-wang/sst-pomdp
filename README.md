@@ -1,111 +1,191 @@
-# Computational Modeling of Cognitive Control in the Stop Signal Task (SST)
+# Decomposing Response Inhibition: A POMDP Model
 
-This repository contains the full data processing, Simulation-Based Inference (SBI) modeling, and analysis pipeline for fitting a Partially Observable Markov Decision Process (POMDP) to Stop Signal Task (SST) data, focusing on the relationship between model parameters and clinical traits (e.g., ADHD).
+## Introduction
 
-## Project Structure and File Descriptions
+This repository contains the code for the research work *Decomposing response inhibition: a POMDP model*. It provides a comprehensive framework to formalize and parameterize the within-trial cognitive processes underlying the Stop Signal Task (SST), specifically tailored to the Adolescent Brain Cognitive Development (ABCD) study design.
 
-The project is divided into logical stages, ensuring a clean and repeatable workflow from raw data to final tables and figures.
+The repository includes:
+* **Data Processing:** Full pipelines for filtering, cleaning, and formatting behavioral data.
+* **Computational Model:** The core Partially Observable Markov Decision Process (POMDP) cognitive model.
+* **Model Fitting:** The inference pipeline Transformer-encoded Simulation-Based Inference (TeSBI).
+* **Versatile Analysis:** Comprehensive scripts for parameter recovery, Posterior Predictive Checks (PPC), latent embeddings, statistical evaluation, and more.
 
-### I. Data Preparation, Cleaning, and Core Modules
+Crucially, this project focuses on the relationship between computational phenotypes (i.e., inferred model parameters) and clinical traits (i.e., ADHD, sex, IQ and medication) within large-scale datasets of children (N > 5000).
 
-These scripts handle the foundational work: filtering raw data, calculating behavioral metrics, and defining the core cognitive model.
-
-| Script | Purpose |
-| :--- | :--- |
-| **`filter.py`** | Filters the ABCD SST behavioral dataset based on quality control criteria (e.g., performance flags, trial counts) and copies the corresponding valid raw data files into a clean destination folder. |
-| **`preprocessing.py`** | Core utility for data cleaning. Loads raw SST trial-level data, categorizes trials into outcomes (GS, GE, GM, SS, SE), discretizes timestamps (RT/SSD) into 25ms steps, and formats the data for model input. |
-| **`stats.py`** | Calculates descriptive behavioral statistics (SSRT, reaction times) from raw SST files and merges them with demographic, CBCL (ADHD scores), medication, and IQ data to create a comprehensive analysis dataset. |
-| **`metrics.py`** | Contains mathematical functions to calculate behavioral statistics (e.g., SSRT) and distance metrics (Wasserstein, Kolmogorov-Smirnov) used to quantify the discrepancy between observed human data and model simulations. |
-| **`pomdp.py`** | Defines the **core cognitive model**, a Partially Observable Markov Decision Process (POMDP), for the Stop Signal Task (SST). It includes the mathematical structure, model initialization (perceptual noise, precision and cost parameters), dynamic decision policy calculation (value iteration), and behavioral simulation logic. |
+This code is prepared for open-science reproducibility and is structured to allow for easy environment setup, local testing, and full High Performance Computing (HPC) deployment.
 
 ---
 
-### II. Simulation-Based Inference (SBI) Pipeline
+## Quick Start
 
-These files manage the high-performance computing (HPC) steps for parameter estimation using a Transformer network as the summary statistic.
+We provide an automated quick run test. It skips the raw data processing, uses the provided mock processed data, runs a model sanity check, performs a lightweight parameter inference, and tests all analysis scripts. It is designed to finish in a few minutes.
 
-| Script | Purpose |
-| :--- | :--- |
-| **`pipeline_transformer_snpe.py`** | The **end-to-end SBI pipeline**. It trains a Transformer encoder to summarize trial-level SST data into low-dimensional embeddings, then trains a Neural Spline Flow (NSF) to approximate the posterior distribution of model parameters given these embeddings. It supports pretraining, active learning loops, parameter recovery checks, and final inference. |
-| **`embedding.py`** | Generates subject-level embeddings by processing raw SST data through the pre-trained `TrialTransformer` encoder. It extracts the mean-pooled embedding vector (the summary statistic for SBI) and calculates secondary metrics like the standard deviation of the trial-level latents. |
-| **`run_pipeline.sh`** | A robust SLURM batch script for running the full SBI pipeline on an HPC cluster. It handles scratch management and sequentially executes the pretraining, SNPE training, parameter recovery, and subject inference stages. |
-| **`run_embedding.sh`** | A SLURM batch script for running `embedding.py` to generate subject embeddings on the cluster. It manages the HPC environment and retrieves the output. |
+1. Clone the repository and enter the directory:
+```bash
+git clone git@github.com:wenting-wang/sst-pomdp.git
+cd sst-pomdp
+```
 
----
+2. Create and activate the Conda environment:
 
-### III. Model Validation and Fit Analysis
+```bash
+conda env create -f environment.yml
+conda activate sst-pomdp-env
+```
 
-These scripts validate the reliability of the parameter estimation and assess the model's goodness-of-fit to the data.
+3. Run the automated check:
 
-| Script | Purpose |
-| :--- | :--- |
-| **`ppc.py`** | Performs the core **Posterior Predictive Checks (PPC)** simulation step. It simulates the cognitive model using inferred MAP parameters for each subject and computes discrepancy metrics against observed data. |
-| **`run_ppc.sh`** | A SLURM batch script to parallelize the execution of the `ppc.py` simulation on an HPC cluster. |
-| **`recovery_analysis.py`** | Verifies the reliability of the parameter estimation pipeline. It plots "Ground Truth" vs. "Recovered" parameters and calculates correlation coefficients from the recovery study results. |
-| **`ppc_popu_analysis.py`** | Visualizes the **global model fit across the entire population**. It loads the PPC discrepancy metrics and generates a grid of histograms showing the distribution of these fit errors for each metric. |
-| **`ppc_analysis.py`** | Selects three **representative subjects** (Best, Median, and Worst fit) based on a composite fit cost. This script is used to visualize detailed individual subject fits (RT distributions, inhibition functions, outcome rates). |
-| **`model_fit_analysis.py`** | Visualizes the overall model fit performance by plotting observed vs. simulated behavior for representative subjects, providing a detailed visual diagnostic of model fidelity. |
+```bash
+python run_quick_check.py
+```
 
----
-
-### IV. Parameter and Statistical Analysis
-
-These scripts analyze the inferred parameters and generate final summary tables.
-
-| Script | Purpose |
-| :--- | :--- |
-| **`param_analysis.py`** | Loads the inferred model parameters (MAP estimates), computes summary statistics (mean, median, range), and generates distribution plots (histograms with KDE overlays) for the key cognitive parameters. |
-| **`param_lmm.py`** | Performs statistical analysis using Linear Mixed-Effects Models (LMM) to quantify the relationship between inferred cognitive parameters and clinical traits (e.g., ADHD), controlling for covariates (Sex, IQ, Medication). Outputs a formatted LaTeX table of the results. |
-| **`count_demo.py`** | Generates a demographic summary table (LaTeX format) displaying subject counts stratified by key groups (ADHD score, Sex, IQ tertiles, Medication status). |
+If successful, the script will output `ALL TESTS PASSED SUCCESSFULLY!` and you can view the generated artifacts in the `outputs/` folder.
 
 ---
 
-### V. Proposed Folder Structure for Organization
+## Detailed Guide
 
-For improved clarity, modularity, and long-term maintenance, it is highly recommended to arrange the files into a functional subfolder structure.
+To reproduce the full pipeline used in the paper, follow these steps.
+
+### Step 1: Data Cleaning (Optional)
+
+If you have the raw datasets, you can run the quality control and filtering steps. Otherwise, you can skip this step and use the provided subject-level mock data in `data/example_*.csv`, and trial-level mock data in `data/example_processed_data/`.
+
+```bash
+# Optional: Run QC on raw data
+python utils/01_qc_filter.py
+python utils/02_qc_report.py
+python utils/03_build_dataset.py
+```
+
+### Step 2: Model Sanity Check
+
+Before fitting data, verify that the core POMDP model simulates dynamics of within-trial belief states, action values, and stop prior effects properly. This generates theoretical plots of the model's behavior.
+
+```bash
+# Generates the within-trial dynamics figures
+python analysis/fig_dynamics.py
+```
+
+**Expected Output:** `fig_belief_states.png`, `fig_action_value.png`, and `fig_stop_prior_effects.png` plots saved in the `outputs/` folder.
+
+```bash
+# Generates the softmax policy figures
+python analysis/fig_policy.py
+```
+
+**Expected Output:** `fig_policy_summary.png`, `fig_policy_GS.png`, `fig_policy_GE.png`, `fig_policy_GM.png`, `fig_policy_SS.png`, and `fig_policy_SE.png` plots saved in the `outputs/` folder.
+
+### Step 3: Model Fitting
+
+The main parameter inference pipeline uses a Transformer encoder and a SNPE neural network, which is quite computationally heavy for PCs. To reproduce the paper's full results, deploy the SLURM script on an HPC cluster with GPU access:
+
+```bash
+sbatch slurm/run_tesbi.sh
+```
+
+Note: To test a fast version of this locally, use the arguments provided inside `run_quick_check.py`.
+
+The TeSBI pipeline operates in four stages:
+
+1. **Pretrain** a Transformer encoder to learn patterns in sequential behavior.
+2. **Train** a Sequential Neural Posterior Estimation (SNPE) network to learn the mapping between parameters and behavior.
+3. **Parameter Recovery** to validate the inference method on simulated ground truth data.
+4. **Parameter Inference** to extract the final subject-level parameters from observed trial-level behavior.
+
+To further validate the inference methods alongside parameter recovery, you can extract the latent behavioral embeddings (using the pretrained encoder) and run posterior predictive checks (using the trained posterior):
+
+```bash
+# Extract latent behavioral embeddings
+sbatch slurm/run_embedding.sh
+
+# Run posterior predictive checks
+sbatch slurm/run_ppc.sh
+```
+
+### Step 4: Results Analysis
+
+Once the model is fit, or by using the pre-supplied example data in the `data/` folder, you can generate the figures and tables used in the manuscript. The analysis scripts are configured to read from the `data/` files so they work immediately out of the box.
+
+```bash
+# Generate the parameter distribution figure
+python analysis/fig_param_dist.py
+
+# Run linear models to show relationship between model parameters and clinical traits
+python analysis/tab_lm_params.py
+
+# Run posterior predictive checks (three representative subjects)
+python analysis/fig_ppc_reps.py
+
+# Run posterior predictive checks (all subjects)
+python analysis/fig_ppc_population.py
+
+# Run canonical correlation analysis (CCA)
+python analysis/fig_cca.py
+
+# Run PCA of latent behavioral embeddings analysis
+python analysis/fig_pca_embed.py
+
+# Generate parameter recovery analysis
+python analysis/fig_params_recovery.py
+
+# Run sensitivity analysis for marginal effect of parameters
+python analysis/fig_sensitivity.py
+
+# Generate demographics counts table (i.e., ADHD trait, sex, IQ, medication)
+python analysis/tab_demo_counts.py
+
+# Run linear models (behavior across demographics)
+python analysis/tabl_lm_behavior.py
 
 ```
-.
-├── analysis/                         # Analysis and plotting scripts
-│   ├── counts_demo.py                # Demographics table generation
-│   ├── param_analysis.py             # Parameter distribution plots
-│   ├── param_lmm.py                  # LMM for parameter-trait correlation
-│   ├── ppc_analysis.py               # Representative subject fit plots
-│   ├── ppc_popu_analysis.py          # Population PPC histograms
-│   └── recovery_analysis.py          # Parameter recovery analysis
-│
-├── inference/                        # SBI and Inference logic
-│   ├── embedding.py                  # Subject embedding extraction
-│   ├── pipeline_transformer_snpe.py  # End-to-end SBI logic
-│   └── ppc.py                        # Posterior Predictive Check simulation logic
-│
-├── model/                            # Model definitions
-│   └── pomdp.py                      # POMDP model class and math
-│
-├── outputs/                          # Generated results, plots, and tables
-│   ├── counts_demo.tex               # Demographics table (LaTeX)
-│   ├── embeddings.csv                # Extracted summary statistic embeddings
-│   ├── encoder.pt                    # Trained Transformer encoder weights
-│   ├── lmm_results.tex               # LMM analysis results (LaTeX)
-│   ├── param_recovery.png            # Parameter recovery plot
-│   ├── parameters.png                # Parameter distribution plot
-│   ├── posterior_summary.csv         # Inferred parameter means for all subjects
-│   ├── ppc.png                       # PPC representative subject plot
-│   ├── ppc_metrics.csv               # Goodness-of-fit metrics
-│   ├── ppc_popu.png                  # Population PPC histogram plot
-│   ├── recovery.csv                  # Recovery analysis source data
-│   └── stats_beh_full.csv            # Full calculated behavioral statistics
-│
-├── slurm/                            # HPC execution scripts
-│   ├── run_embedding.sh              # Job script: Embedding generation
-│   ├── run_pipeline.sh               # Job script: Full SBI pipeline
-│   └── run_ppc.sh                    # Job script: PPC simulation
-│
-├── utils/                            # Shared utility functions
-│   ├── filter.py                     # QC and data filtering
-│   ├── metrics.py                    # Behavioral and distance metrics
-│   ├── preprocessing.py              # Trial-level data cleaning
-│   └── stats.py                      # Behavioral statistics calculation
-│
-└── README.md                         # Project documentation
-```
+
+**Expected Output:** Final `.png` figures and `.tex` tables saved directly to the `outputs/` directory.
+
+---
+
+## Project Structure
+
+The repository is divided into modular folders separating the core computational model, scalable inference on HPC, and downstream analysis.
+
+* **`analysis/`**: Scripts to generate all paper figures and tables.
+
+* **`core/`**: The fundamental computational and simulation modules.
+  * `models.py`: The POMDP model.
+  * `simulation.py`: Trial-level and task-level simulation.
+  * `plotting.py`: Visualization of within-trial dynamics and policy.
+
+
+* **`data/`**: Contains mock data in `example_processed_data/` and mock summary `.csv` files to allow users to test the analysis scripts without needing the raw, restricted clinical dataset.
+
+* **`hpc/`**: Heavy computational pipelines for model fitting.
+  * `tesbi.py`: The end-to-end TeSBI pipeline.
+  * `embedding.py`: Extracts subject-level summary embeddings using the trained Transformer.
+  * `ppc.py`: Posterior Predictive Checks (PPC).
+
+* **`outputs/`**: Destination folders for generated plots, models, and tables.
+
+* **`slurm/`**: Bash scripts (`run_tesbi.sh`, `run_ppc.sh`, etc.) for submitting `hpc/` tasks to an HPC cluster.
+  
+* **`utils/`**: Data processing, quality control, and system checks.
+  * `01_qc_filter.py`, `02_qc_report.py`, `03_build_dataset.py`: Pipelines for filtering raw data and building analysis datasets.
+  * `preprocessing.py`: Trial-level data cleaning and formatting.
+  * `metrics.py`: Extract behavioral metrics.
+  * `check_gpu.py`: Utility to verify CUDA/GPU availability.
+* `environment.yml`: Environment setup file to install necessary dependencies.
+
+---
+
+## Reference
+
+For full theoretical details, mathematical derivations, and comprehensive results, please refer to our paper: 
+
+[citation/link here when published]
+
+---
+
+## Contact
+
+If you encounter any concerns, have questions about the methodology, or want to discuss the code, please feel free to open an issue on this repository or reach out directly:
+
+Wenting Wang (wenting.wang@tuebingen.mpg.de)
