@@ -37,7 +37,7 @@ conda env create -f environment.yml
 conda activate sst-pomdp-env
 ```
 
-**Option B: Using standard Python (`venv`)**
+**Option B: Using standard Python (**`venv`**)**
 
 If you do not have Conda installed, you can use Python's built-in virtual environment and `pip`:
 
