@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This repository contains the code for the research work *Decomposing response inhibition: a POMDP model*. It provides a comprehensive framework to formalize and parameterize the within-trial cognitive processes underlying the Stop Signal Task (SST), specifically tailored to the Adolescent Brain Cognitive Development (ABCD) study design.
+This repository contains the code for the research work [Decomposing response inhibition: a POMDP model](link here when published). It provides a comprehensive framework to formalize and parameterize the within-trial cognitive processes underlying the Stop Signal Task (SST), specifically tailored to the Adolescent Brain Cognitive Development (ABCD) study design.
 
 The repository includes:
 * **Data Processing:** Full pipelines for filtering, cleaning, and formatting behavioral data.
