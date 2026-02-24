@@ -15,7 +15,7 @@ Crucially, this project focuses on the relationship between computational phenot
 This code is prepared for open-science reproducibility and is structured to allow for easy environment setup, local testing, and full High Performance Computing (HPC) deployment.
 
 <p align="center">
-  <img src="img/sst.png" width="80%" alt="SST-POMDP Model Architecture">
+  <img src="img/sst.png" width="90%" alt="SST-POMDP Model Architecture">
 </p>
 
 
