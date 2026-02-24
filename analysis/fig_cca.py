@@ -29,8 +29,8 @@ OUTPUT_PLOT = OUT_DIR / "fig_cca.png"
 # 2. PLOTTING STYLE
 # =============================================================================
 
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['Arial']
+# plt.rcParams['font.family'] = 'sans-serif'
+# plt.rcParams['font.sans-serif'] = ['Arial']
 plt.rcParams['font.size'] = 9
 plt.rcParams['axes.linewidth'] = 1.0    
 

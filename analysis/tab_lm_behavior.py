@@ -127,7 +127,7 @@ def build_latex_table(results_dict):
         sub_lines = []
         sub_lines.append(r"    \begin{subtable}[t]{0.48\linewidth}")
         sub_lines.append(r"    \centering")
-        sub_lines.append(f"    \caption{{{SUB_CAP[dv]}}}")
+        sub_lines.append(rf"    \caption{{{SUB_CAP[dv]}}}")
         sub_lines.append(rf"    \label{{tab:lm_all_{sub_label}}}")
         sub_lines.append(r"    \begin{tabular}{lcccc}")
         sub_lines.append(r"    \toprule")

@@ -13,6 +13,7 @@ dependencies:
   - joblib
   - pytorch
   - pip
+  - statsmodels
   - pip:
     - sbi      # Simulation-Based Inference package
     - tqdm
