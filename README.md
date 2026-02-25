@@ -56,7 +56,7 @@ pip install -r requirements.txt
 python run_quick_check.py
 ```
 
-If successful, the script will output `ALL TESTS PASSED SUCCESSFULLY!` and you can view the generated artifacts in the `outputs/` folder.
+If successful, the script will output `ALL TESTS PASSED SUCCESSFULLY!` and you can view the generated figures and tables in the `outputs/` folder.
 
 
 ## Detailed Guide
