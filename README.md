@@ -199,6 +199,6 @@ For full theoretical details, mathematical derivations, and comprehensive result
 
 ## Contact
 
-If you encounter any concerns, have questions about the methodology, or want to discuss the code, please feel free to open an issue on this repository or reach out directly:
+If you have any concerns, have questions, or want to discuss the code, please feel free to open an issue on this repository or reach out directly:
 
 Wenting Wang (wenting.wang@tuebingen.mpg.de)
