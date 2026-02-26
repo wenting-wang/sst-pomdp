@@ -12,7 +12,7 @@ The repository includes:
 
 Crucially, this project focuses on the relationship between computational phenotypes (i.e., inferred model parameters) and clinical traits (i.e., ADHD, sex, IQ and medication) within large-scale datasets of children (N > 5000).
 
-This code is prepared for open-science reproducibility and is structured to allow for easy environment setup, local testing, and full High Performance Computing (HPC) deployment.
+This code is structured to allow for easy environment setup, local testing, and full High Performance Computing (HPC) deployment.
 
 <p align="center">
   <img src="img/sst.png" width="100%" alt="SST-POMDP Model Architecture">
