@@ -294,7 +294,7 @@ if __name__ == "__main__":
         # 2. Run Visualization Parts
         run_pca_2d(df_data.copy())
         # Uncomment the line below to also generate the 3D interactive plot
-        # run_pca_3d(df_data.copy())
+        run_pca_3d(df_data.copy())
         
     except Exception as e:
         print(f"An error occurred: {e}")

@@ -14,6 +14,7 @@ dependencies:
   - pytorch
   - pip
   - statsmodels
+  - plotly
   - pip:
     - sbi      # Simulation-Based Inference package
     - tqdm

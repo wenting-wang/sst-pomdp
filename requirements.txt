@@ -8,3 +8,4 @@ torch
 sbi
 tqdm
 statsmodels
+plotly
