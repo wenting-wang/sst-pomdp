@@ -34,9 +34,6 @@ pd.set_option('future.no_silent_downcasting', True)
 
 # --- Base Directories ---
 BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
-OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
-
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Input Data Directories & Files ---
 FILE_LIST_PATH = BASE_DIR / 'sst_valid_filenames.txt'
@@ -49,7 +46,7 @@ MEDS_FILE = BASE_DIR / 'ph_p_meds.csv'
 IQ_FILE = BASE_DIR / 'nc_y_wisc.csv'
 
 # --- Final Merged Output ---
-OUT_FINAL_CSV = OUT_DIR / 'clinical_behavior.csv'
+OUT_FINAL_CSV = BASE_DIR / 'clinical_behavior.csv'
 
 
 # ==============================================================================

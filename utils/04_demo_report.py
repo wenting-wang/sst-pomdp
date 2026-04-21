@@ -22,7 +22,7 @@ BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
 INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"
 RAW_DATA_DIR = BASE_DIR / "abcd_sst_tlb01"
 VALID_TXT = BASE_DIR / "sst_valid_filenames.txt"
-FINAL_DATA_CSV = Path('/kyb/agpd/wwang/sst-pomdp/outputs/clinical_behavior.csv')
+FINAL_DATA_CSV = BASE_DIR / 'clinical_behavior.csv'
 
 RT_THRESHOLD = 200
 MAX_ALLOWED_COUNT = 3
