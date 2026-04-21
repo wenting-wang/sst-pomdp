@@ -128,7 +128,7 @@ def get_behavioral_stats(file_list_path: Path, data_dir: Path) -> pd.DataFrame:
             
             # Unpack the 16 computed values
             (perc_gs, perc_ge, perc_gm, perc_ss,
-             mrt_gs, mrt_ge, mrt_se, ssrt,
+             mrt_gs, mrt_ge, mrt_se, mssd, ssrt,
              rate_perc_ss_ssd, rate_rt_se_ssd,
              pes, pss, pges, acf1, acf2, slope) = stats
 
@@ -138,7 +138,7 @@ def get_behavioral_stats(file_list_path: Path, data_dir: Path) -> pd.DataFrame:
                 'filename': fname,
                 # Basic Metrics
                 'perc_gs': perc_gs, 'perc_ge': perc_ge, 'perc_gm': perc_gm, 'perc_ss': perc_ss,
-                'mrt_gs': mrt_gs, 'mrt_ge': mrt_ge, 'mrt_se': mrt_se, 'ssrt': ssrt,
+                'mrt_gs': mrt_gs, 'mrt_ge': mrt_ge, 'mrt_se': mrt_se, 'mssd': mssd, 'ssrt': ssrt,
                 # SSD Slopes
                 'rate_perc_ss_ssd': rate_perc_ss_ssd, 'rate_rt_se_ssd': rate_rt_se_ssd,
                 # Sequential / Temporal Effects

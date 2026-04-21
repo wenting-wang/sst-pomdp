@@ -215,7 +215,7 @@ def get_stats_mean(df):
     # --- NEW: Sequential Metrics ---
     pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df, rt_col='rt_real')
     
-    return (*percs, mrt_gs, mrt_ge, mrt_se, ssrt, rate_perc_ss, rate_rt_se, 
+    return (*percs, mrt_gs, mrt_ge, mrt_se, mssd, ssrt, rate_perc_ss, rate_rt_se, 
             pes, pss, pges, acf1, acf2, slope)
 
 
@@ -237,7 +237,7 @@ def get_stats_mean_sim(df):
     df['rt_ms'] = df['rt'] * 25
     pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df, rt_col='rt_ms')
     
-    return (*percs, mrt_gs, mrt_ge, mrt_se, ssrt, rate_perc_ss, rate_rt_se, 
+    return (*percs, mrt_gs, mrt_ge, mrt_se, mssd, ssrt, rate_perc_ss, rate_rt_se, 
             pes, pss, pges, acf1, acf2, slope)
 
 
