@@ -27,12 +27,13 @@ sys.path.append(parent_dir)
 from utils.preprocessing import preprocessing
 from utils.metrics import get_stats_mean
 
+pd.set_option('future.no_silent_downcasting', True)
 # ==============================================================================
 # CONFIGURATION & PATHS
 # ==============================================================================
 
 # --- Base Directories ---
-BASE_DIR = Path('/kyb/agpd/wwang/data/')
+BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
 OUT_DIR = Path('/kyb/agpd/wwang/sst-pomdp/outputs/')
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -163,7 +164,7 @@ def get_behavioral_stats(file_list_path: Path, data_dir: Path) -> pd.DataFrame:
 
 def get_cbcl_data(path: Path) -> pd.DataFrame:
     """Loads and cleans Child Behavior Checklist (CBCL) ADHD scores."""
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     df['subject_id'] = df['src_subject_id'].apply(clean_subject_id)
     df['year'] = df['eventname'].apply(clean_year)
     df = df[['subject_id', 'year', 'cbcl_scr_dsm5_adhd_r']]
@@ -173,7 +174,7 @@ def get_cbcl_data(path: Path) -> pd.DataFrame:
 
 def get_demo_data(path: Path) -> pd.DataFrame:
     """Loads and cleans demographic data, forward/backward filling missing Sex values."""
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     df['subject_id'] = df['src_subject_id'].apply(clean_subject_id)
     df['year'] = df['eventname'].apply(clean_year)
     
@@ -183,13 +184,13 @@ def get_demo_data(path: Path) -> pd.DataFrame:
     df = df[['subject_id', 'year', 'sex']]
     
     # Fill missing sex values for a subject across their longitudinal visits
-    df['sex'] = df.groupby('subject_id')['sex'].transform(lambda s: s.ffill().bfill())
+    df['sex'] = df.groupby('subject_id')['sex'].transform(lambda s: s.ffill().bfill()).infer_objects(copy=False)
     return df
 
 
 def get_med_data(path: Path) -> pd.DataFrame:
     """Loads medication logs and flags subjects currently taking ADHD meds."""
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     med_cols = [col for col in df.columns if "rxnorm_p" in col]
     
     # Search for known ADHD medication names using Regex
@@ -205,7 +206,7 @@ def get_med_data(path: Path) -> pd.DataFrame:
 
 def get_iq_data(path: Path) -> pd.DataFrame:
     """Loads and cleans WISC-V IQ (Intelligence Quotient) scores."""
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     df['subject_id'] = df['src_subject_id'].apply(clean_subject_id)
     df['year'] = df['eventname'].apply(clean_year)
     df = df[['subject_id', 'year', 'pea_wiscv_trs']]

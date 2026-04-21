@@ -35,7 +35,7 @@ import pandas as pd
 # ==============================================================================
 # --- Base Directory Setup ---
 # Update this path to where your raw ABCD data and metadata CSV are stored.
-BASE_DIR = Path("/kyb/agpd/wwang/data/")  # <-- UPDATE THIS PATH
+BASE_DIR = Path("/kyb/agpd/wwang/data_abcd/")  # <-- UPDATE THIS PATH
 
 # --- Input Files & Directories ---
 INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"

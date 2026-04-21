@@ -26,7 +26,7 @@ import pandas as pd
 # ==============================================================================
 # --- Base Directory Setup ---
 # Users should update this path to point to their local data folder
-BASE_DIR = Path("/kyb/agpd/wwang/data/")  # <-- UPDATE THIS PATH
+BASE_DIR = Path("/kyb/agpd/wwang/data_abcd/")  # <-- UPDATE THIS PATH
 
 # --- Input Files & Directories ---
 INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"
@@ -173,13 +173,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# ==============================================================================
-# EXAMPLE EXPECTED OUTPUT
-# ==============================================================================
-# FINAL FILTERING REPORT
-# ========================================
-# Metadata Valid Subjects : 6773
-#  - Missing Raw Files    : 682
-#  - Failed RT Quality    : 746
-#  - Successfully Copied  : 5345
-# ========================================
