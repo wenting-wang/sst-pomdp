@@ -1,4 +1,6 @@
 import sys
+import zipfile
+import tempfile
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -7,8 +9,24 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 import traceback
+import argparse
 
-# --- Directory Setup ---
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Generate PPC Representative Subjects Plots")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
+
+DEMO_MODE = not args.prod
+
+# =============================================================================
+# 1. DIRECTORY SETUP & CORE IMPORTS
+# =============================================================================
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 
@@ -17,8 +35,11 @@ sys.path.append(str(PROJECT_ROOT))
 
 from core.models import POMDP
 from core import simulation
+from utils.preprocessing import preprocessing
 
-# --- PLOS CB STYLING SETUP ---
+# =============================================================================
+# 2. PLOS CB STYLING SETUP
+# =============================================================================
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
@@ -37,21 +58,34 @@ STYLE = {
     "marker_size": 2.5,     
 }
 
-# --- Configuration & Paths ---
-DATA_DIR = PROJECT_ROOT / "data"
-OUT_DIR = PROJECT_ROOT / "outputs"
-RAW_DATA_DIR = DATA_DIR / "example_processed_data"  
+# ==============================================================================
+# 3. CONFIGURATION & PATHS
+# ==============================================================================
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    DATA_DIR = PROJECT_ROOT / "data"
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    RAW_DATA_DIR = DATA_DIR / "example_processed_data"
+    
+    FILTER_CSV = DATA_DIR / "example_clinical_behavior.csv"
+    PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
+    PPC_METRICS_CSV = DATA_DIR / "example_ppc_metrics.csv" 
+    USE_PREPROCESSING = False  # Example data is already cleaned
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    DATA_DIR = PROJECT_ROOT / "data"
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    RAW_DATA_DIR = Path("/Users/w/Desktop/data/sst_valid_base")
+    
+    FILTER_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
+    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    PPC_METRICS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/ppc_metrics_6p_v1.csv") 
+    USE_PREPROCESSING = True   # Raw desktop data needs preprocessing
 
-# Ensure directories exist
+# Ensure output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Inputs
-FILTER_CSV = DATA_DIR / "example_clinical_behavior.csv"
-PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
-PPC_METRICS_CSV = DATA_DIR / "example_ppc_metrics.csv" 
-
-# Output
+# Output Figure Path
 OUTPUT_IMAGE = OUT_DIR / "fig_ppc_reps.png"
 
 # Plot Settings
@@ -62,20 +96,52 @@ N_TRACES_HIGHLIGHT = 3
 
 # --- Core Functions ---
 
+def load_subject_data(data_dir, sid, use_preprocessing=False):
+    """
+    Flexibly loads subject data. 
+    1. Tries direct path matching first (data_dir / f"{sid}.csv")
+    2. Falls back to rglob recursive search
+    3. Falls back to extracting from a matching ZIP archive
+    """
+    folder_path = Path(data_dir)
+    
+    # Priority 1: Direct exact match (Original logic for example_processed_data or structured folders)
+    direct_file = folder_path / f"{sid}.csv"
+    if direct_file.exists():
+        if use_preprocessing:
+            return preprocessing(str(direct_file))
+        return pd.read_csv(direct_file)
+    
+    # Priority 2: Recursive search (In case files are named differently or nested)
+    csv_files = list(folder_path.rglob(f"*{sid}*.csv"))
+    if csv_files:
+        if use_preprocessing:
+            return preprocessing(str(csv_files[0]))
+        return pd.read_csv(csv_files[0])
+    
+    # Priority 3: Zip container check (Adaptive mode fallback)
+    zip_files = list(folder_path.glob("*.zip"))
+    for fp in zip_files:
+        if str(sid) in fp.name:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with zipfile.ZipFile(fp, 'r') as zr:
+                    zr.extractall(tmpdir)
+                extracted = list(Path(tmpdir).rglob(f"*{sid}*.csv"))
+                if extracted:
+                    if use_preprocessing:
+                        return preprocessing(str(extracted[0]))
+                    return pd.read_csv(extracted[0])
+    return None
+
 def select_representative_subjects(ppc_file, filter_file):
-    """
-    Selects 3 representative subjects (Good, Moderate, Poor fit) based on composite PPC cost.
-    """
     if not ppc_file.exists() or not filter_file.exists():
         raise FileNotFoundError(
-            f"Missing required summary files in {DATA_DIR}. "
-            "Ensure clinical_behavior and ppc_metrics CSVs are present."
+            f"Missing required summary files. Check your paths."
         )
 
     df_dist = pd.read_csv(ppc_file)
     df_filter = pd.read_csv(filter_file)
     
-    # Safely handle 'year' format differences
     df_filter['year'] = df_filter['year'].astype(str)
     valid_ids = df_filter[df_filter['year'] == 'baseline']['subject_id'].values
     df_dist = df_dist[df_dist['subject_id'].isin(valid_ids)].copy()
@@ -83,7 +149,6 @@ def select_representative_subjects(ppc_file, filter_file):
     if df_dist.empty:
         raise ValueError("No baseline subjects found in the PPC metrics file.")
 
-    # Calculate Composite Cost (Z-scored distances)
     dis_cols = [col for col in df_dist.columns if col.startswith('dis_')]
     df_z = df_dist.copy()
     for col in dis_cols:
@@ -114,12 +179,19 @@ def select_representative_subjects(ppc_file, filter_file):
 
 
 def get_subject_params(params_file, subject_id, year='baseline'):
-    """Extracts POMDP parameters for a specific subject."""
     df = pd.read_csv(params_file)
-    year_col = 'subject_year' if 'subject_year' in df.columns else 'year'
-    df[year_col] = df[year_col].astype(str)
     
-    mask = (df["subject_id"] == subject_id) & (df[year_col] == str(year))
+    # Clean 'NDAR_' prefix from both dataframe and target ID for robust matching
+    df['clean_id'] = df['subject_id'].astype(str).str.replace('NDAR_', '', regex=False)
+    clean_target = str(subject_id).replace('NDAR_', '')
+    
+    year_col = 'subject_year' if 'subject_year' in df.columns else 'year'
+    if year_col in df.columns:
+        df[year_col] = df[year_col].astype(str)
+        mask = (df["clean_id"] == clean_target) & (df[year_col] == str(year))
+    else:
+        mask = (df["clean_id"] == clean_target)
+        
     if not mask.any():
         return None
     
@@ -128,15 +200,12 @@ def get_subject_params(params_file, subject_id, year='baseline'):
 
 
 def run_simulation_multi(params, n_repeat=30):
-    """Runs the POMDP simulation multiple times for a subject (Optimized list generation)."""
     pomdp = POMDP(**params)
     pomdp.value_iteration_tensor()
 
-    # Create a single list of dictionaries instead of 30 isolated DataFrames
     all_rows = []
     for i in range(n_repeat):
         out = simulation.simu_task(pomdp)
-        # Assuming out provides row tuples mapping to [result, rt, ssd]
         for t, row in enumerate(out):
             all_rows.append({
                 'result': row[0], 'rt': row[1], 'ssd': row[2], 
@@ -146,7 +215,7 @@ def run_simulation_multi(params, n_repeat=30):
     return pd.DataFrame(all_rows)
 
 
-# --- Helper Stats Functions (Heavily Optimized) ---
+# --- Helper Stats Functions ---
 
 def get_outcome_stats(df_sim):
     outcomes = ['GS', 'GE', 'GM', 'SS', 'SE']
@@ -155,7 +224,6 @@ def get_outcome_stats(df_sim):
     return rates_per_sim.mean(), rates_per_sim.std()
 
 def get_rt_dist_stats(df_sim, outcome, bins):
-    """Optimized using groupby to avoid boolean masking in a loop."""
     sub_all = df_sim[df_sim['result'] == outcome]
     densities = []
     
@@ -177,20 +245,16 @@ def get_rt_dist_stats(df_sim, outcome, bins):
     return np.mean(densities, axis=0), np.std(densities, axis=0)
 
 def get_inhibition_stats(df_sim):
-    """Optimized using pivot_table to calculate stop probabilities instantly."""
     stop_trials = df_sim[df_sim['result'].isin(['SS', 'SE'])].copy()
     if stop_trials.empty:
         return pd.Series(dtype=float), pd.Series(dtype=float)
 
     stop_trials['is_ss'] = (stop_trials['result'] == 'SS').astype(int)
-    
-    # Automatically calculates means across simulations matching the same SSD
     prob_per_sim = stop_trials.pivot_table(index='sim_id', columns='ssd', values='is_ss', aggfunc='mean')
     
     return prob_per_sim.mean(axis=0), prob_per_sim.std(axis=0).fillna(0)
 
 def _clean_spines(ax):
-    """Applies PLOS style cleaning to axes."""
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_linewidth(STYLE['axis_lw'])
@@ -198,7 +262,6 @@ def _clean_spines(ax):
     ax.tick_params(width=STYLE['axis_lw'], labelsize=STYLE['tick_fontsize'])
 
 def _get_prob_ss(df):
-    """Calculates empirical probability of stop success by SSD."""
     stop_df = df[df['result'].isin(['SS', 'SE'])].copy()
     if stop_df.empty:
         return pd.Series(dtype=float)
@@ -209,7 +272,6 @@ def _get_prob_ss(df):
 # --- Plotting Functions ---
 
 def plot_model_fit(subjects, raw_data_dir, params_file, output_path):
-    """Generates the 5x3 Posterior Predictive Check plot grid."""
     fig, axs = plt.subplots(5, 3, figsize=(7.5, 8.5), constrained_layout=True)
     
     step_size_ms = 25
@@ -219,19 +281,17 @@ def plot_model_fit(subjects, raw_data_dir, params_file, output_path):
         sid = subj_info['sid']
         print(f"\nProcessing Subject: {sid}...")
         
-        # 1. Prepare Data
         params = get_subject_params(params_file, sid)
-        file_path = raw_data_dir / f"{sid}.csv"
+        df_obs = load_subject_data(raw_data_dir, sid, use_preprocessing=USE_PREPROCESSING)
             
-        if not file_path.exists():
-            print(f"  -> WARNING: Missing raw trial data for {sid} in {raw_data_dir}.")
+        if df_obs is None:
+            print(f"  -> WARNING: Missing data for {sid} in {raw_data_dir}.")
             continue
             
         if not params:
             print(f"  -> WARNING: Missing posterior parameters for {sid}.")
             continue
             
-        df_obs = pd.read_csv(file_path)
         df_sim = run_simulation_multi(params, n_repeat=N_REPEAT)
 
         # -----------------------------------------------------------
@@ -306,7 +366,6 @@ def plot_model_fit(subjects, raw_data_dir, params_file, output_path):
         ax.scatter(df_obs.index + 1, df_obs['ssd'] * step_size_ms, 
                    color=COLOR_OBS, s=STYLE['marker_size'], alpha=0.6, zorder=10)
         
-        # Pre-fill SSDs across the whole grouped dataset ONCE (Massive speed up)
         df_sim['ssd_filled'] = df_sim.groupby('sim_id')['ssd'].ffill() * step_size_ms
 
         for i, sub in df_sim.groupby('sim_id'):

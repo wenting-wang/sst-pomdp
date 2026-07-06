@@ -2,8 +2,24 @@ import sys
 import pandas as pd
 from pathlib import Path
 import traceback
+import argparse
 
-# --- Directory Setup ---
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Generate Policy Plots")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
+
+DEMO_MODE = not args.prod
+
+# =============================================================================
+# 1. DIRECTORY SETUP & CORE IMPORTS
+# =============================================================================
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 
@@ -14,28 +30,42 @@ from core.models import POMDP
 from core import simulation
 from core import plotting
 
-# --- Configuration ---
-DATA_DIR = PROJECT_ROOT / "data"
-OUT_DIR = PROJECT_ROOT / "outputs"
+# =============================================================================
+# 2. CONFIGURATION & PATHS
+# =============================================================================
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    PARAMS_CSV = PROJECT_ROOT / "data" / "example_params_posteriors.csv"
+    SUBJECT_ID = 'EXAMPLE_SUB_001'
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    SUBJECT_ID = 'NDAR_INVRUVFBX1L'
 
-# Ensure output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Input Files
-PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
-
-# Example subject to plot (will fallback to first available if not found)
-SUBJECT_ID = 'EXAMPLE_SUB_001'
-
+# =============================================================================
+# 3. MODEL PARAMETERS
+# =============================================================================
 FIXED_PARAMS = {
-    'cost_go_error': 1.0,
-    'cost_go_missing': 1.0,
-    'cost_time': 0.001,
-    'rate_stop_trial': 1/6
+    "inv_temp": 44.6534,
+    "q_s_n": 0.0787,
+    "rate_stop_trial": 1.0 / 6.0,
+    "q_d_n": 0.0798,
+    "cost_go_missing": 15.7821,
 }
 
 # Params to extract from CSV
-DYNAMIC_KEYS = ['q_d_n', 'q_d', 'q_s_n', 'q_s', 'cost_stop_error', 'inv_temp']
+DYNAMIC_PARAMS = [
+    "q_d",
+    "q_s",
+    "tau",
+    "cost_stop_error",
+    "cost_go_error",
+    "cost_time"
+]
 
 # --- Helper Functions ---
 
@@ -68,7 +98,7 @@ def get_subject_params(target_id, path):
         raise KeyError("Could not find 'index' or 'param' column in posterior data.")
 
     # Extract dynamic params and merge with fixed
-    dynamic = {k: p_dict[k] for k in DYNAMIC_KEYS if k in p_dict}
+    dynamic = {k: p_dict[k] for k in DYNAMIC_PARAMS if k in p_dict}
     merged_params = {**dynamic, **FIXED_PARAMS}
     
     return merged_params, target_id
@@ -80,7 +110,11 @@ def main():
     try:
         print(f"Loading params for {SUBJECT_ID}...")
         params, final_subject_id = get_subject_params(SUBJECT_ID, PARAMS_CSV)
-
+        params['tau'] = int(params['tau']) 
+        print(f"Original tau: {params['tau']}")
+        
+        params['tau'] = 0
+        
         print(f"\nParameters loaded for {final_subject_id}:")
         for k, v in params.items():
             print(f"  {k}: {v}")
@@ -94,12 +128,12 @@ def main():
         # 1. Run simulations
         out_go = simulation.simu_trial_batch(
             model=pomdp, true_go_state='right', true_stop_state='nonstop',
-            ssd=None, batch_size=2000, verbose=True
+            ssd=None, batch_size=3000, verbose=True
         )
         
         out_stop = simulation.simu_trial_batch(
             model=pomdp, true_go_state='right', true_stop_state='stop',
-            ssd=10, batch_size=2000, verbose=True
+            ssd=7, batch_size=600, verbose=True
         )
 
         # 2. Define mapping for outcome names, data sources, and result codes
@@ -127,7 +161,8 @@ def main():
                 out_dict=all_outcomes,
                 outcome_name=outcome_name,
                 saveto=save_path, 
-                gamma=0.2
+                dpi=600,
+                gamma=0.05
             )
             print(f"  Saved full policy plot: {save_path.name}")
         
@@ -139,7 +174,7 @@ def main():
             selected_timesteps=[3, 17, 33, 39],
             saveto=summary_path,
             dpi=600,
-            gamma=0.2
+            gamma=0.05
         )
         print(f"  Saved summary policy plot: {summary_path.name}")
         

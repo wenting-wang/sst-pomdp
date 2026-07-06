@@ -9,6 +9,7 @@ import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap, to_rgb
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+import matplotlib.colors as mcolors
 
 # Local application/library imports
 current_dir = Path(__file__).resolve().parent
@@ -160,7 +161,11 @@ def plot_belief(out_go, out_stop, show_cnt=5, saveto=None):
                           color=colors["sigma"], alpha=style['sem_alpha'], linewidth=0)
 
         # Overlay individual sample paths
-        subset_indices = list(range(min(show_cnt, len(df))))
+        # subset_indices = list(range(min(show_cnt, len(df))))
+        
+        np.random.seed(42)
+        subset_indices = np.random.choice(len(df), size=min(show_cnt, len(df)), replace=False)
+        
         for j in subset_indices:
             d_idx = rt_indices[j]
             limit = d_idx + 1
@@ -384,7 +389,11 @@ def plot_action_value(out_go, out_stop, show_cnt=5, saveto=None):
         plot_mean_with_sem(df_qr, colors["Q_R"])
 
         # Overlay individual sample paths
-        subset_indices = list(range(min(show_cnt, len(df))))
+        # subset_indices = list(range(min(show_cnt, len(df))))
+        
+        np.random.seed(42)
+        subset_indices = np.random.choice(len(df), size=min(show_cnt, len(df)), replace=False)
+        
         for j in subset_indices:
             d_idx = rt_indices[j]
             limit = d_idx + 1
@@ -460,405 +469,223 @@ def plot_action_value(out_go, out_stop, show_cnt=5, saveto=None):
         plt.show()
 
 
-def plot_stop_prior_context(
+def plot_stop_prior_sensitivity(
     model,
     params: dict,
-    rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-    ssd=10,
-    n_batch=500,     
-    n_session=1000,  
+    rates=(0.05, 0.10, 1/6, 0.20, 0.25, 0.30),
+    ssds=np.arange(2, 35, 4), 
+    n_session=400,  
     saveto=None,
-    t_max=40
+    min_rt_trials=3 
 ):
     """
-    Generates a 2x3 composite figure illustrating the effect of stop priors on 
-    behavioral accuracy, belief updates, and decision variables (gap) over time.
+    Plots the sensitivity of behavioral metrics to varying stop prior probabilities
+    and Stop Signal Delays (SSDs).
+    Generates a 1x3 composite figure illustrating Go outcomes and parameterized 
+    Stop outcomes across the SSD spectrum with a discretized color legend.
     
     Args:
         model: The computational model object.
         params: Dictionary of model parameters.
         rates: Tuple of stop trial prior probabilities to simulate.
-        ssd: Stop signal delay for stop trials.
-        n_batch: Number of batches for timecourse simulations.
-        n_session: Number of sessions for behavioral statistic simulations.
+        ssds: Array of Stop Signal Delays to sweep (should be evenly spaced integers).
+        n_session: Number of simulated trials per rate/SSD condition.
         saveto: Optional filepath to save the output figure.
-        t_max: Maximum timestep limit for visualization.
+        min_rt_trials: Minimum number of trials required to plot an RT data point.
     """
     
-    # Configure PLOS-compliant typography and earth-tone color palettes
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
     
     style = {
-        "label_fontsize": 9,     
-        "tick_fontsize": 8,      
-        "legend_fontsize": 8,    
-        "panel_label_size": 12,  
-        "line_width": 1.0,      
-        "marker_size": 3.5,        
+        "label_fontsize": 10,     
+        "tick_fontsize": 9,      
+        "legend_fontsize": 10,    
+        "panel_label_size": 14,  
+        "line_width": 1.2,      
+        "marker_size": 4.5,        
         "cap_size": 1.5,
-        "shadow_color": "gray"
     }
 
-    # Behavioral metrics palette (Neutral/Grays)
-    color_acc = '#363636' 
-    color_rt  = "#7f7f7f" 
+    color_primary = '#000000' 
     
-    # Belief updates palette (Burgundy gradient)
-    cmap_bel = LinearSegmentedColormap.from_list("earth_red", ["#E6B8B8", "#800020"]) 
-    rate_colors_bel = [cmap_bel(i) for i in np.linspace(0.1, 1.0, len(rates))]
-
-    # Action gap palette (Coffee/Bronze gradient)
-    cmap_gap = LinearSegmentedColormap.from_list("earth_brown", ["#D7CCC8", "#5D4037"])
-    rate_colors_gap = [cmap_gap(i) for i in np.linspace(0.1, 1.0, len(rates))]
-
-    # Helper function to truncate sequence lists and compute descriptive statistics
-    def _truncate_and_collect(seq_list):
-        if not seq_list: 
-            return np.full(t_max, np.nan), np.full(t_max, np.nan)
-        df = pd.DataFrame(seq_list).reindex(columns=range(t_max))
-        with np.errstate(invalid='ignore'):
-            mu = df.mean(axis=0).to_numpy()
-            sd = df.std(axis=0, ddof=1).to_numpy()
-            count = df.count(axis=0).to_numpy()
-            se = np.where(count > 1, sd / np.sqrt(count), np.nan)
-        return mu, se
-
-    beh_rows = []
-    timecourse_go = []
-    timecourse_stop = []
-
-    print("Simulating across varying stop priors...")
+    res_stop_acc = {s: [] for s in ssds}
+    res_stop_acc_err = {s: [] for s in ssds}
+    res_stop_rt = {s: [] for s in ssds}
+    res_stop_rt_err = {s: [] for s in ssds}
     
-    # Run model simulations across the provided prior rates
-    for r_idx, r in enumerate(rates):
+    go_acc_list = []
+    go_acc_err = []
+    go_rt_list = []
+    go_rt_err = []
+
+    print("Simulating multidimensional sensitivity (Prior x SSD)...")
+    
+    for r in rates:
         p = params.copy()
         p['rate_stop_trial'] = float(r)
+        
         m = model.__class__(**p)
         m.value_iteration_tensor()
 
-        # Simulate behavioral sessions
-        out_sess = []
-        for _ in range(n_session):
-            is_stop = np.random.rand() < float(r)
-            gs = np.random.choice(["left", "right"])
-            type_ = "stop" if is_stop else "nonstop"
-            ssd_ = ssd if is_stop else None
-            res_tuple = simulation.simu_trial(m, gs, type_, ssd_, verbose=False) 
-            out_sess.append(res_tuple)
+        all_go_df_list = []
         
-        df_beh = pd.DataFrame(out_sess, columns=["result", "rt", "ssd"])
-        
-        # Calculate behavioral statistics for Go and Stop contexts
-        go_df = df_beh[df_beh["result"].isin(["GS", "GE", "GM"])]
-        if len(go_df) > 0:
-            go_acc = (go_df["result"]=="GS").mean()
-            go_acc_sem = np.sqrt(go_acc*(1-go_acc)/len(go_df))
-            gs_df = go_df[go_df["result"]=="GS"]
-            go_rt = gs_df["rt"].mean() if len(gs_df)>0 else np.nan
-            go_rt_sem = gs_df["rt"].std(ddof=1)/np.sqrt(len(gs_df)) if len(gs_df)>0 else np.nan
-        else:
-            go_acc, go_acc_sem, go_rt, go_rt_sem = [np.nan]*4
-
-        stop_df = df_beh[df_beh["result"].isin(["SS", "SE"])]
-        if len(stop_df) > 0:
-            stop_acc = (stop_df["result"]=="SS").mean()
-            stop_acc_sem = np.sqrt(stop_acc*(1-stop_acc)/len(stop_df))
-            se_df = stop_df[stop_df["result"]=="SE"]
-            stop_rt = se_df["rt"].mean() if len(se_df)>0 else np.nan 
-            stop_rt_sem = se_df["rt"].std(ddof=1)/np.sqrt(len(se_df)) if len(se_df)>0 else np.nan
-        else:
-            stop_acc, stop_acc_sem, stop_rt, stop_rt_sem = [np.nan]*4
-
-        beh_rows.append({
-            "rate": r,
-            "go_acc": go_acc, "go_acc_sem": go_acc_sem, 
-            "go_rt": go_rt, "go_rt_sem": go_rt_sem,
-            "stop_acc": stop_acc, "stop_acc_sem": stop_acc_sem, 
-            "stop_rt": stop_rt, "stop_rt_sem": stop_rt_sem
-        })
-
-        # Simulate detailed timecourses for decision variables
-        g_data = {"GS": {"sig": [], "gap": [], "rt": []}, 
-                  "GE": {"sig": [], "gap": [], "rt": []}, 
-                  "GM": {"sig": [], "gap": [], "rt": []}}
-        s_data = {"SS": {"sig": [], "gap": [], "rt": []}, 
-                  "SE": {"sig": [], "gap": [], "rt": []}}
-
-        def process_trial_result(res_dict, store_dict):
-            """Extracts belief and value gap metrics up to the decision point."""
-            out_type = res_dict["result"] 
-            if out_type not in store_dict: return
+        for current_ssd in ssds:
+            out_sess = []
+            for _ in range(n_session):
+                is_stop = np.random.rand() < float(r)
+                gs = np.random.choice(["left", "right"])
+                type_ = "stop" if is_stop else "nonstop"
+                ssd_ = current_ssd if is_stop else None
+                
+                res_tuple = simulation.simu_trial(m, gs, type_, ssd_, verbose=False) 
+                out_sess.append(res_tuple[:3])
             
-            policy_seq = res_dict["policy_seq"]
-            decision_idx = len(policy_seq) - 1
-            for t_idx, act in enumerate(policy_seq):
-                if act != 2: 
-                    decision_idx = t_idx
-                    break
-            limit = decision_idx + 1
-            sigma_seq = np.array(res_dict["sigma_seq"])[:limit]
-            vw = np.array(res_dict["value_wait_seq"])[:limit]
-            vl = np.array(res_dict["value_left_seq"])[:limit]
-            vr = np.array(res_dict["value_right_seq"])[:limit]
+            df_beh = pd.DataFrame(out_sess, columns=["result", "rt", "ssd"])
             
-            if len(vl) > 0:
-                min_go = np.minimum(vl, vr)
-                gap_seq = vw - min_go
+            go_df = df_beh[df_beh["result"].isin(["GS", "GE", "GM"])]
+            all_go_df_list.append(go_df)
+            
+            stop_df = df_beh[df_beh["result"].isin(["SS", "SE"])]
+            if len(stop_df) > 0:
+                s_acc = (stop_df["result"] == "SS").mean()
+                s_acc_err = np.sqrt(s_acc * (1 - s_acc) / len(stop_df))
+                
+                se_df = stop_df[stop_df["result"] == "SE"]
+                if len(se_df) >= min_rt_trials:
+                    s_rt = se_df["rt"].mean()
+                    s_rt_err = se_df["rt"].std(ddof=1) / np.sqrt(len(se_df))
+                else:
+                    s_rt, s_rt_err = np.nan, np.nan
             else:
-                gap_seq = []
+                s_acc, s_acc_err, s_rt, s_rt_err = [np.nan] * 4
+                
+            res_stop_acc[current_ssd].append(s_acc)
+            res_stop_acc_err[current_ssd].append(s_acc_err)
+            res_stop_rt[current_ssd].append(s_rt)
+            res_stop_rt_err[current_ssd].append(s_rt_err)
 
-            store_dict[out_type]["sig"].append(sigma_seq)
-            store_dict[out_type]["gap"].append(gap_seq)
-            store_dict[out_type]["rt"].append(decision_idx)
+        all_go_df = pd.concat(all_go_df_list)
+        if len(all_go_df) > 0:
+            g_acc = (all_go_df["result"] == "GS").mean()
+            g_acc_err = np.sqrt(g_acc * (1 - g_acc) / len(all_go_df))
+            
+            gs_df = all_go_df[all_go_df["result"] == "GS"]
+            if len(gs_df) >= min_rt_trials:
+                g_rt = gs_df["rt"].mean()
+                g_rt_err = gs_df["rt"].std(ddof=1) / np.sqrt(len(gs_df))
+            else:
+                g_rt, g_rt_err = np.nan, np.nan
+        else:
+            g_acc, g_acc_err, g_rt, g_rt_err = [np.nan] * 4
+            
+        go_acc_list.append(g_acc)
+        go_acc_err.append(g_acc_err)
+        go_rt_list.append(g_rt)
+        go_rt_err.append(g_rt_err)
 
-        for _ in range(n_batch):
-            true_go = np.random.choice(["left", "right"])
-            res_g = simulation.simu_trial(m, true_go, "nonstop", None, verbose=True)
-            process_trial_result(res_g, g_data)
-            res_s = simulation.simu_trial(m, true_go, "stop", ssd, verbose=True)
-            process_trial_result(res_s, s_data)
-
-        # Aggregate timecourse results
-        pkt_g = {
-            "rate": r, 
-            "color_bel": rate_colors_bel[r_idx], 
-            "color_gap": rate_colors_gap[r_idx],
-            "rts": {k: v["rt"] for k,v in g_data.items()}
-        }
-        for cat in ["GS", "GE", "GM"]:
-            pkt_g[f"sigma_{cat}_mu"], pkt_g[f"sigma_{cat}_sem"] = _truncate_and_collect(g_data[cat]["sig"])
-            pkt_g[f"gap_{cat}_mu"],   pkt_g[f"gap_{cat}_sem"]   = _truncate_and_collect(g_data[cat]["gap"])
-        timecourse_go.append(pkt_g)
-
-        pkt_s = {
-            "rate": r, 
-            "color_bel": rate_colors_bel[r_idx], 
-            "color_gap": rate_colors_gap[r_idx],
-            "rts": {k: v["rt"] for k,v in s_data.items()}
-        }
-        for cat in ["SS", "SE"]:
-            pkt_s[f"sigma_{cat}_mu"], pkt_s[f"sigma_{cat}_sem"] = _truncate_and_collect(s_data[cat]["sig"])
-            pkt_s[f"gap_{cat}_mu"],   pkt_s[f"gap_{cat}_sem"]   = _truncate_and_collect(s_data[cat]["gap"])
-        timecourse_stop.append(pkt_s)
-
-    df_beh_summary = pd.DataFrame(beh_rows)
-
-    # Initialize plotting layout
-    fig = plt.figure(figsize=(7.5, 4.8)) 
-    gs = fig.add_gridspec(2, 3, wspace=0.60, hspace=0.35)
-
-    ax_go_beh   = fig.add_subplot(gs[0, 0])
-    ax_go_bel   = fig.add_subplot(gs[0, 1])
-    ax_go_gap   = fig.add_subplot(gs[0, 2])
-    ax_stop_beh = fig.add_subplot(gs[1, 0])
-    ax_stop_bel = fig.add_subplot(gs[1, 1])
-    ax_stop_gap = fig.add_subplot(gs[1, 2])
-
-    axes_all = [ax_go_beh, ax_go_bel, ax_go_gap, ax_stop_beh, ax_stop_bel, ax_stop_gap]
-    axes_time = [ax_go_bel, ax_go_gap, ax_stop_bel, ax_stop_gap]
-    x_time = np.arange(1, t_max+1)
-
-    # Create shadow twin axes for survival probability overlays
-    shadow_axes = {}
-    for ax in axes_time:
-        ax.set_zorder(1)
-        ax.patch.set_visible(False)
-        ax_shad = ax.twinx()
-        ax_shad.set_ylim(0, 1.05)
-        ax_shad.set_yticks([0, 1.0]) 
-        ax_shad.set_yticklabels(["0", "1"], fontsize=style['tick_fontsize'], color='gray')
-        ax_shad.set_ylabel('Survival Prob.', fontsize=style['label_fontsize'], color='gray')
-        ax_shad.spines['top'].set_visible(False)
-        ax_shad.spines['left'].set_visible(False)
-        ax_shad.spines['right'].set_color('gray')
-        ax_shad.spines['right'].set_linewidth(0.5)
-        ax_shad.set_zorder(0)
-        shadow_axes[ax] = ax_shad
+    fig, axes = plt.subplots(1, 3, figsize=(12.0, 4.0))
+    ax_go, ax_s_acc, ax_s_rt = axes
     
-    def draw_shadow(target_ax, rt_list, alpha):
-        """Draws the cumulative survival probability shadow based on RT distributions."""
-        if not rt_list or len(rt_list) == 0: return
-        try:
-            valid_rts = np.sort([int(float(r)) + 1 for r in rt_list])
-        except: return
-        n = len(valid_rts)
-        if n == 0: return
-        y = 1.0 - np.arange(1, n + 1) / n
-        x_plot = np.concatenate(([1], valid_rts))
-        y_plot = np.concatenate(([1.0], y))
-        
-        target_ax.fill_between(x_plot, y_plot, step='post', 
-                               color="gray", 
-                               alpha=alpha, 
-                               linewidth=0)
+    plt.subplots_adjust(wspace=0.45, bottom=0.20, top=0.80, right=0.88)
 
-    mid_idx = len(rates) // 2
-    rts_go = timecourse_go[mid_idx]["rts"]
-    rts_stop = timecourse_stop[mid_idx]["rts"]
-
-    # Overlay survival probabilities (shadows) for Go and Stop contexts based on specific outcomes
-    draw_shadow(shadow_axes[ax_go_bel], rts_go.get("GM", []), alpha=0.05)
-    draw_shadow(shadow_axes[ax_go_bel], rts_go.get("GS", []), alpha=0.10)
-    draw_shadow(shadow_axes[ax_go_bel], rts_go.get("GE", []), alpha=0.15)
+    # --- Panel A: Go Trials (Twin Axes) ---
+    ax_go.plot(rates, go_acc_list, color=color_primary, linestyle='-', lw=style['line_width'], zorder=1)
+    ax_go.errorbar(rates, go_acc_list, yerr=go_acc_err, fmt='none', ecolor=color_primary, capsize=style['cap_size'], zorder=1)
+    ax_go.scatter(rates, go_acc_list, s=30, color=color_primary, marker='o', zorder=2)
     
-    draw_shadow(shadow_axes[ax_go_gap], rts_go.get("GM", []), alpha=0.05)
-    draw_shadow(shadow_axes[ax_go_gap], rts_go.get("GS", []), alpha=0.10)
-    draw_shadow(shadow_axes[ax_go_gap], rts_go.get("GE", []), alpha=0.15)
+    ax_go.set_ylabel("Accuracy", color=color_primary, fontsize=style['label_fontsize'])
+    ax_go.set_ylim(-0.05, 1.05)
+    ax_go.set_yticks([0, 0.5, 1.0])
+    ax_go.tick_params(axis='y', colors=color_primary, labelsize=style['tick_fontsize'])
+    ax_go.spines['left'].set_color(color_primary)
+    ax_go.spines['top'].set_visible(False)
+    ax_go.set_title("Go Trials", fontsize=style['label_fontsize'] + 1, pad=10)
 
-    draw_shadow(shadow_axes[ax_stop_bel], rts_stop.get("SS", []), alpha=0.05)
-    draw_shadow(shadow_axes[ax_stop_bel], rts_stop.get("SE", []), alpha=0.10)
+    ax_go_rt = ax_go.twinx()
+    ax_go_rt.plot(rates, go_rt_list, color=color_primary, linestyle='--', lw=style['line_width'], zorder=1)
+    ax_go_rt.errorbar(rates, go_rt_list, yerr=go_rt_err, fmt='none', ecolor=color_primary, capsize=style['cap_size'], zorder=1)
+    ax_go_rt.scatter(rates, go_rt_list, s=30, color=color_primary, marker='s', zorder=2)
     
-    draw_shadow(shadow_axes[ax_stop_gap], rts_stop.get("SS", []), alpha=0.05)
-    draw_shadow(shadow_axes[ax_stop_gap], rts_stop.get("SE", []), alpha=0.10)
+    ax_go_rt.set_ylabel("Reaction Time", color=color_primary, fontsize=style['label_fontsize'])
+    # ax_go_rt.set_ylim(-2, 40)
+    # ax_go_rt.set_yticks([0, 10, 20, 30, 40])
+    ax_go_rt.set_ylim(-2, 30)
+    ax_go_rt.set_yticks([0, 5, 10, 15, 20, 25, 30])
     
-    # Plot primary time series variables
-    def plot_tc(ax, dataset, metric_prefix, outcome_keys, styles_map, color_key):
-        """Plots timecourse data with shaded standard error regions."""
-        for d in dataset:
-            col = d[color_key]
-            for out_key in outcome_keys:
-                mu = d[f"{metric_prefix}_{out_key}_mu"]
-                se = d[f"{metric_prefix}_{out_key}_sem"]
-                ls = styles_map[out_key]["ls"]
-                mask = ~np.isnan(mu)
-                if np.any(mask):
-                    ax.plot(x_time[mask], mu[mask], color=col, ls=ls, lw=style['line_width'])
-                    ax.fill_between(x_time[mask], mu[mask]-se[mask], mu[mask]+se[mask], 
-                                    color=col, alpha=0.15, lw=0)
+    ax_go_rt.tick_params(axis='y', colors=color_primary, labelsize=style['tick_fontsize'])
+    ax_go_rt.spines['right'].set_color(color_primary)
+    ax_go_rt.spines['top'].set_visible(False)
 
-    st_map = {
-        "GS": {"ls": "-"}, "GE": {"ls": "--"}, "GM": {"ls": ":"},
-        "SS": {"ls": "-"}, "SE": {"ls": "--"}
-    }
+    h_acc = Line2D([0], [0], color=color_primary, marker='o', linestyle='-', lw=style['line_width'], label="Accuracy")
+    h_rt  = Line2D([0], [0], color=color_primary, marker='s', linestyle='--', lw=style['line_width'], label="Reaction Time")
+    fig.legend(handles=[h_acc, h_rt], loc='upper center', bbox_to_anchor=(0.5, 0.98), ncol=2, frameon=False, fontsize=style['legend_fontsize'])
+
+    # --- Panel B & C: Stop Trials (SSD Sweep) ---
+    # Create a discrete colormap based on the number of SSDs
+    num_ssds = len(ssds)
+    cmap = LinearSegmentedColormap.from_list('trunc_grey', ['#B0B0B0', '#000000'], N=num_ssds)
     
-    plot_tc(ax_go_bel, timecourse_go, "sigma", ["GS", "GE", "GM"], st_map, "color_bel")
-    plot_tc(ax_go_gap, timecourse_go, "gap",   ["GS", "GE", "GM"], st_map, "color_gap")
+    for i, current_ssd in enumerate(ssds):
+        color = cmap(i)
+        
+        ax_s_acc.plot(rates, res_stop_acc[current_ssd], color=color, lw=style['line_width'], ls='-', zorder=1)
+        ax_s_acc.errorbar(rates, res_stop_acc[current_ssd], yerr=res_stop_acc_err[current_ssd], fmt='o', color=color, markersize=style['marker_size'], capsize=style['cap_size'], zorder=2)
+        
+        ax_s_rt.plot(rates, res_stop_rt[current_ssd], color=color, lw=style['line_width'], ls='--', zorder=1)
+        ax_s_rt.errorbar(rates, res_stop_rt[current_ssd], yerr=res_stop_rt_err[current_ssd], fmt='s', color=color, markersize=style['marker_size'], capsize=style['cap_size'], zorder=2)
+
+    ax_s_acc.set_ylabel("Accuracy", fontsize=style['label_fontsize'])
+    ax_s_acc.set_ylim(-0.05, 1.05)
+    ax_s_acc.set_yticks([0, 0.5, 1.0])
+    ax_s_acc.set_title("Stop Trials", fontsize=style['label_fontsize'] + 1, pad=10)
+    ax_s_acc.spines['top'].set_visible(False)
+    ax_s_acc.spines['right'].set_visible(False)
+
+    ax_s_rt.set_ylabel("Reaction Time", fontsize=style['label_fontsize'])
+    # ax_s_rt.set_ylim(-2, 40)
+    # ax_s_rt.set_yticks([0, 10, 20, 30, 40])
+    ax_s_rt.set_ylim(-2, 30)
+    ax_s_rt.set_yticks([0, 5, 10, 15, 20, 25, 30])
     
-    plot_tc(ax_stop_bel, timecourse_stop, "sigma", ["SS", "SE"], st_map, "color_bel")
-    plot_tc(ax_stop_gap, timecourse_stop, "gap",   ["SS", "SE"], st_map, "color_gap")
+    ax_s_rt.set_title("Stop Trials", fontsize=style['label_fontsize'] + 1, pad=10)
+    ax_s_rt.spines['top'].set_visible(False)
+    ax_s_rt.spines['right'].set_visible(False)
 
-    # Construct behavior summary panels (Leftmost columns)
-    def plot_behavior_panel(ax, df, acc_key, acc_sem_key, rt_key, rt_sem_key, context_label):
-        """Generates dual-axis behavioral panels (Accuracy and RT) snapped to the bottom-right legend."""
-        
-        # Plot Accuracy (Left Axis)
-        ax.plot(df["rate"], df[acc_key], color=color_acc, linestyle='-', lw=style['line_width'], zorder=1)
-        ax.errorbar(df["rate"], df[acc_key], yerr=df[acc_sem_key],
-                    fmt='none', ecolor=color_acc, capsize=style['cap_size'], zorder=1)
-        ax.scatter(df["rate"], df[acc_key], s=20, 
-                   c=rate_colors_bel, marker='o', 
-                   edgecolors=color_acc, linewidth=0.5, zorder=2)
-        
-        ax.set_ylabel("Accuracy", color=color_acc, fontsize=style['label_fontsize'])
-        ax.set_ylim(0, 1.05)
-        ax.set_yticks([0, 0.5, 1.0])
-        ax.tick_params(axis='y', colors=color_acc, labelsize=style['tick_fontsize'])
-        ax.spines['left'].set_color(color_acc)
-        ax.spines['top'].set_visible(False)
-
-        # Plot RT (Right Axis)
-        axR = ax.twinx()
-        axR.plot(df["rate"], df[rt_key], color=color_rt, linestyle='-', lw=style['line_width'], zorder=1)
-        axR.errorbar(df["rate"], df[rt_key], yerr=df[rt_sem_key],
-                    fmt='none', ecolor=color_rt, capsize=style['cap_size'], zorder=1)
-        axR.scatter(df["rate"], df[rt_key], s=20, 
-                    c=rate_colors_bel, marker='s', 
-                    edgecolors=color_rt, linewidth=0.5, zorder=2)
-        
-        axR.set_ylabel("Time Step", color=color_rt, fontsize=style['label_fontsize'])
-        axR.set_ylim(1, 40)
-        axR.set_yticks([1, 20, 40])
-        axR.tick_params(axis='y', colors=color_rt, labelsize=style['tick_fontsize'])
-        axR.spines['right'].set_color(color_rt)
-        axR.spines['top'].set_visible(False)
-        
-        # Add localized panel legend for markers
-        h_acc = Line2D([0], [0], color=color_acc, marker='o', linestyle='-', 
-                       lw=style['line_width'], markersize=style['marker_size'], label=f"{context_label} Acc.")
-        h_rt  = Line2D([0], [0], color=color_rt, marker='s', linestyle='-', 
-                       lw=style['line_width'], markersize=style['marker_size'], label=f"{context_label} RT")
-
-        ax.legend(handles=[h_acc, h_rt], loc='lower right', bbox_to_anchor=(1.0, 0.02), 
-                  frameon=False, fontsize=style['tick_fontsize'], handlelength=1.0)
-        
-        return axR
-
-    plot_behavior_panel(ax_go_beh, df_beh_summary, "go_acc", "go_acc_sem", "go_rt", "go_rt_sem", "Go")
-    plot_behavior_panel(ax_stop_beh, df_beh_summary, "stop_acc", "stop_acc_sem", "stop_rt", "stop_rt_sem", "Stop")
-
-    # Apply global axis formatting and constraints
-    for ax in [ax_go_beh, ax_stop_beh]:
+    x_min, x_max = min(rates), max(rates)
+    padding = (x_max - x_min) * 0.1 if x_max > x_min else 0.05
+    tick_locs = [float(r) for r in rates]
+    
+    for ax in axes:
         ax.set_xlabel(r"Stop Prior $\tilde{r}^\nu$", fontsize=style['label_fontsize'])
-        ax.set_xlim(0, 1)
-        ax.set_xticks([0.0, 0.5, 1.0])
-        ax.spines['top'].set_visible(False)
+        ax.set_xlim(x_min - padding, x_max + padding)
+        ax.set_xticks(tick_locs)
+        ax.set_xticklabels([f"{r:.2f}" for r in tick_locs], rotation=45)
         ax.tick_params(axis='x', labelsize=style['tick_fontsize'])
 
-    for ax in axes_time:
-        ax.set_xlim(1, 40)
-        ax.set_xticks([1, 20, 40])
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.tick_params(axis='both', labelsize=style['tick_fontsize'])
-        ax.set_xlabel("Time Step", fontsize=style['label_fontsize'])
-
-    ax_go_bel.set_ylabel(r"Belief $\sigma^\nu_t$", fontsize=style['label_fontsize'])
-    ax_stop_bel.set_ylabel(r"Belief $\sigma^\nu_t$", fontsize=style['label_fontsize'])
-    label_gap = r"$Q(W) - \min(Q(L), Q(R))$"
-    ax_go_gap.set_ylabel(label_gap, fontsize=style['label_fontsize'])
-    ax_stop_gap.set_ylabel(label_gap, fontsize=style['label_fontsize'])
+    # --- Discrete Colorbar Setup ---
+    # Calculate bounds centered around the SSD values to create discrete bins
+    step = ssds[1] - ssds[0] if len(ssds) > 1 else 1
+    bounds = np.arange(ssds[0] - step/2, ssds[-1] + step, step)
+    norm = mcolors.BoundaryNorm(bounds, cmap.N)
     
-    stop_signal_duration = 12 
-    if ssd:
-        for ax in [ax_stop_bel, ax_stop_gap]:
-            ax.axvline(ssd+1, color='k', ls='--', alpha=0.5, linewidth=0.8)
-            ax.axvline(ssd+1 + stop_signal_duration, color='k', ls='--', alpha=0.5, linewidth=0.8)
+    cax = fig.add_axes([0.91, 0.20, 0.015, 0.60])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    cbar = fig.colorbar(sm, cax=cax, ticks=ssds, spacing='uniform')
+    
+    cbar.set_label('Stop Signal Delay (SSD)', fontsize=style['label_fontsize'])
+    cbar.ax.set_yticklabels([str(s) for s in ssds])
+    
+    # Explicitly format major ticks and turn off all minor ticks
+    cbar.ax.tick_params(axis='y', which='major', labelsize=style['tick_fontsize'])
+    cbar.ax.minorticks_off() 
+    
+    cbar.outline.set_visible(False)
 
-    # Insert panel lettering
-    labels = ['A', 'B', 'C', 'D', 'E', 'F']
-    for ax, label in zip(axes_all, labels):
-        ax.text(-0.15, 1.15, label, transform=ax.transAxes,
+    labels = ['A', 'B', 'C']
+    for ax, label in zip(axes, labels):
+        ax.text(-0.25, 1.12, label, transform=ax.transAxes, 
                 fontsize=style['panel_label_size'], fontweight='bold', va='top', ha='right')
-
-    # Construct globally aligned bottom legend 
-    y_row1 = 0.12  
-    y_row2 = 0.08  
-    
-    fig.text(0.02, y_row1, r"Stop Prior $\tilde{r}^\nu$", ha='left', va='center', 
-             fontsize=style['legend_fontsize']+1, fontweight='normal')
-    
-    h_bel = [Line2D([0],[0], color=c, lw=1, label=f"{r:.2f}") for r,c in zip(rates, rate_colors_bel)]
-    fig.legend(handles=h_bel, loc='center left', bbox_to_anchor=(0.12, y_row1),
-               ncol=len(rates), frameon=False, fontsize=style['legend_fontsize'],
-               columnspacing=0.8, handletextpad=0.4)
-    
-    h_gap = [Line2D([0],[0], color=c, lw=1, label=f"{r:.2f}") for r,c in zip(rates, rate_colors_gap)]
-    fig.legend(handles=h_gap, loc='center left', bbox_to_anchor=(0.12, y_row2),
-               ncol=len(rates), frameon=False, fontsize=style['legend_fontsize'],
-               columnspacing=0.8, handletextpad=0.4)
-
-    fig.text(0.55, y_row1, "Outcome", ha='left', va='center', 
-             fontsize=style['legend_fontsize']+1, fontweight='normal')
-
-    h_go = [
-        Line2D([0],[0], color='k', ls='-',  lw=1, label='Go Success'),
-        Line2D([0],[0], color='k', ls='--', lw=1, label='Go Error'),
-        Line2D([0],[0], color='k', ls=':',  lw=1, label='Go Missing'),
-    ]
-    fig.legend(handles=h_go, loc='center left', bbox_to_anchor=(0.64, y_row1),
-               ncol=3, frameon=False, fontsize=style['legend_fontsize'],
-               columnspacing=1.2, handletextpad=0.5)
-
-    h_stop = [
-        Line2D([0],[0], color='k', ls='-',  lw=1, label='Stop Success'),
-        Line2D([0],[0], color='k', ls='--', lw=1, label='Stop Error'),
-    ]
-    fig.legend(handles=h_stop, loc='center left', bbox_to_anchor=(0.64, y_row2),
-               ncol=2, frameon=False, fontsize=style['legend_fontsize'],
-               columnspacing=1.2, handletextpad=0.5)
-
-    plt.subplots_adjust(bottom=0.24, top=0.92, left=0.08, right=0.98)
 
     if saveto:
         fig.savefig(saveto, dpi=600, bbox_inches='tight', pil_kwargs={"compression": "tiff_lzw"})
@@ -995,40 +822,32 @@ def plot_policy_summary(model, out_dict, selected_timesteps, saveto=None, dpi=30
             if p == 1: return 1.0
             return (p**g) / (p**g + (1-p)**g)
 
-        tick_probs = [0, 0.01, 0.1, 0.5, 1.0]
-        tick_pos = [true_to_visual(p, gamma) for p in tick_probs]
-        tick_labels = ['0', '.01', '.1', '.5', '1']
+
+        tick_labels = ['0', '.33', '.67', '1']
+        tick_pos = [0.0, 0.333, 0.667, 1.0] 
         
         ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(1,0)), color='black', lw=1, clip_on=False)
         ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(0,1)), color='black', lw=1, clip_on=False)
         
         base_pad = -0.22
         
-        for p, lbl in zip(tick_pos, tick_labels):
+        for p_vis, lbl in zip(tick_pos, tick_labels):
             # Go Right Axis (Top)
-            tx, ty = fwd_rot(p, 0)
-            dx, dy = fwd_rot(p, -0.04)
+            tx, ty = fwd_rot(p_vis, 0)
+            dx, dy = fwd_rot(p_vis, -0.04)
             ax_leg.plot([tx, dx], [ty, dy], color='black', lw=0.8, clip_on=False)
             
-            p_shift = p
-            if lbl == '.5':   p_shift += 0.07  
-            if lbl == '.01':  p_shift -= 0.07  
-            
-            lx, ly = fwd_rot(p_shift, base_pad)
+            lx, ly = fwd_rot(p_vis, base_pad)
             ax_leg.text(lx, ly, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
             
             # Go Left Axis (Bottom)
-            tx2, ty2 = fwd_rot(0, p)
-            dx2, dy2 = fwd_rot(-0.04, p)
+            tx2, ty2 = fwd_rot(0, p_vis)
+            dx2, dy2 = fwd_rot(-0.04, p_vis)
             ax_leg.plot([tx2, dx2], [ty2, dy2], color='black', lw=0.8, clip_on=False)
             
-            p_shift_2 = p
-            if lbl == '.5':   p_shift_2 += 0.08  
-            if lbl == '.01':  p_shift_2 -= 0.08  
-
-            lx2, ly2 = fwd_rot(base_pad, p_shift_2)
+            lx2, ly2 = fwd_rot(base_pad, p_vis)
             ax_leg.text(lx2, ly2, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
-                
+
         # Placement for outer peripheral text labels
         label_color = "#000000"
         ax_leg.text(0.5, 2, 'Softmax Policy', ha='left', va='bottom', fontsize=10, color=label_color) 
@@ -1048,6 +867,7 @@ def plot_policy_summary(model, out_dict, selected_timesteps, saveto=None, dpi=30
     
     total_go = sum([len(out_dict[k]) for k in go_keys if k in out_dict and out_dict[k] is not None])
     total_stop = sum([len(out_dict[k]) for k in stop_keys if k in out_dict and out_dict[k] is not None])
+    total_trials = total_go + total_stop
     
     fig_width = 7.5 
     fig_height = max(4.0, n_rows * 1.5)
@@ -1062,9 +882,9 @@ def plot_policy_summary(model, out_dict, selected_timesteps, saveto=None, dpi=30
         
         count = len(out_data) if out_data is not None else 0
         if out_name in go_keys:
-            pct = (count / total_go * 100) if total_go > 0 else 0
+            pct = (count / total_trials * 100) if total_trials > 0 else 0
         elif out_name in stop_keys:
-            pct = (count / total_stop * 100) if total_stop > 0 else 0
+            pct = (count / total_trials * 100) if total_trials > 0 else 0
         else:
             pct = 0.0
         
@@ -1112,12 +932,30 @@ def plot_policy_summary(model, out_dict, selected_timesteps, saveto=None, dpi=30
 
     draw_right_triangle_legend(fig, [0.7, 0.65, 0.068, 0.068], gamma, colors, angle_deg=135)
 
-    legend_elements = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', markersize=6, alpha=0.75, 
-               label='Belief States') 
-    ]
+    # legend_elements = [
+    #     Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', markersize=6, alpha=0.75, 
+    #            label='Belief States') 
+    # ]
+    # fig.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.68, 0.54), 
+    #            frameon=False, fontsize=style['legend_fontsize'], handletextpad=1.5)
+    
+
+    example_counts = [1, 10, 100, 1000]
+    legend_elements = []
+    
+    for count in example_counts:
+        s_val = 2 + np.log1p(count) * 8
+        ms = np.sqrt(s_val)
+        legend_elements.append(
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', 
+               markeredgecolor='none',
+               markersize=ms, alpha=0.75, label=f'N = {count}')
+    )
+
     fig.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.68, 0.54), 
-               frameon=False, fontsize=style['legend_fontsize'], handletextpad=1.5)
+           frameon=False, fontsize=style['legend_fontsize'], handletextpad=1.5,
+           title="Belief State Frequency", title_fontsize=style['legend_fontsize'])
+    
     
     plt.subplots_adjust(top=0.90, bottom=0.10, left=0.14, right=0.68, hspace=0.15, wspace=0.15)
 
@@ -1168,14 +1006,15 @@ def plot_policy(model, out_dict, outcome_name, saveto=None, dpi=300, gamma=0.3):
     
     total_go = sum([len(out_dict[k]) for k in go_keys if k in out_dict and out_dict[k] is not None])
     total_stop = sum([len(out_dict[k]) for k in stop_keys if k in out_dict and out_dict[k] is not None])
+    total_trials = total_go + total_stop
     
     out_data = out_dict.get(outcome_name, [])
     count = len(out_data) if out_data is not None else 0
     
     if outcome_name in go_keys:
-        pct = (count / total_go * 100) if total_go > 0 else 0
+        pct = (count / total_trials * 100) if total_trials > 0 else 0
     elif outcome_name in stop_keys:
-        pct = (count / total_stop * 100) if total_stop > 0 else 0
+        pct = (count / total_trials * 100) if total_trials > 0 else 0
     else:
         pct = 0.0
 
@@ -1274,38 +1113,31 @@ def plot_policy(model, out_dict, outcome_name, saveto=None, dpi=300, gamma=0.3):
             if p == 1: return 1.0
             return (p**g) / (p**g + (1-p)**g)
 
-        tick_probs = [0, 0.01, 0.1, 0.5, 1.0]
-        tick_pos = [true_to_visual(p, gamma) for p in tick_probs]
-        tick_labels = ['0', '.01', '.1', '.5', '1']
+        tick_labels = ['0', '.33', '.67', '1']
+        tick_pos = [0.0, 0.333, 0.667, 1.0] 
         
         ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(1,0)), color='black', lw=1, clip_on=False)
         ax_leg.plot(*zip(fwd_rot(0,0), fwd_rot(0,1)), color='black', lw=1, clip_on=False)
         
         base_pad = -0.22
         
-        for p, lbl in zip(tick_pos, tick_labels):
-            tx, ty = fwd_rot(p, 0)
-            dx, dy = fwd_rot(p, -0.04)
+        for p_vis, lbl in zip(tick_pos, tick_labels):
+            # Go Right Axis (Top)
+            tx, ty = fwd_rot(p_vis, 0)
+            dx, dy = fwd_rot(p_vis, -0.04)
             ax_leg.plot([tx, dx], [ty, dy], color='black', lw=0.8, clip_on=False)
             
-            p_shift = p
-            if lbl == '.5':   p_shift += 0.07  
-            if lbl == '.01':  p_shift -= 0.07  
-            
-            lx, ly = fwd_rot(p_shift, base_pad)
+            lx, ly = fwd_rot(p_vis, base_pad)
             ax_leg.text(lx, ly, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
             
-            tx2, ty2 = fwd_rot(0, p)
-            dx2, dy2 = fwd_rot(-0.04, p)
+            # Go Left Axis (Bottom)
+            tx2, ty2 = fwd_rot(0, p_vis)
+            dx2, dy2 = fwd_rot(-0.04, p_vis)
             ax_leg.plot([tx2, dx2], [ty2, dy2], color='black', lw=0.8, clip_on=False)
             
-            p_shift_2 = p
-            if lbl == '.5':   p_shift_2 += 0.08  
-            if lbl == '.01':  p_shift_2 -= 0.08  
-
-            lx2, ly2 = fwd_rot(base_pad, p_shift_2)
+            lx2, ly2 = fwd_rot(base_pad, p_vis)
             ax_leg.text(lx2, ly2, lbl, rotation=0, ha='center', va='center', fontsize=8, fontstretch='ultra-condensed')
-                
+       
         label_color = "#000000"
         offset_right = 0.4
         
@@ -1375,13 +1207,30 @@ def plot_policy(model, out_dict, outcome_name, saveto=None, dpi=300, gamma=0.3):
     draw_right_triangle_legend(fig, [0.1, base_y - leg_h/2, leg_w, leg_h], gamma, colors, angle_deg=135)
     fig.text(0.27, base_y, 'Softmax Policy', ha='left', va='center', fontsize=10, color='#000000')
 
+    # label_str = f'Belief States ({outcome_name}, {pct:.1f}%)'
+    # legend_elements = [
+    #     Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', markersize=6, alpha=0.75, 
+    #            label=label_str)
+    # ]
+    # fig.legend(handles=legend_elements, loc='center', bbox_to_anchor=(0.58, base_y), 
+    #            frameon=False, fontsize=style['legend_fontsize'])
+
     label_str = f'Belief States ({outcome_name}, {pct:.1f}%)'
-    legend_elements = [
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', markersize=6, alpha=0.75, 
-               label=label_str)
-    ]
+    example_counts = [1, 10, 100, 1000] 
+    legend_elements = []
+
+    for count in example_counts:
+        s_val = 2 + np.log1p(count) * 8
+        ms = np.sqrt(s_val)
+        legend_elements.append(
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#222222', 
+                   markeredgecolor='none', markersize=ms, alpha=0.75, label=f'N = {count}')
+        )
+
     fig.legend(handles=legend_elements, loc='center', bbox_to_anchor=(0.58, base_y), 
-               frameon=False, fontsize=style['legend_fontsize'])
+               frameon=False, fontsize=style['legend_fontsize'], handletextpad=1.5,
+               title=label_str, title_fontsize=style['legend_fontsize'])
+
 
     plt.subplots_adjust(top=0.68, bottom=0.08, left=0.08, right=0.95, hspace=0.45, wspace=0.15)
 
@@ -1390,7 +1239,5 @@ def plot_policy(model, out_dict, outcome_name, saveto=None, dpi=300, gamma=0.3):
         plt.close(fig)
     else:
         plt.show()
-
-
 
 

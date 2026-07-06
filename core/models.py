@@ -9,7 +9,7 @@ class POMDP:
     """
 
     def __init__(self, q_d_n, q_d, q_s_n, q_s, cost_go_error, cost_go_missing,
-                 cost_stop_error, cost_time, inv_temp, rate_stop_trial):
+                 cost_stop_error, cost_time, inv_temp, rate_stop_trial, tau):
         """
         Initialize the model with perceptual noise and cost parameters.
 
@@ -24,9 +24,10 @@ class POMDP:
             cost_time (float): Per-step time cost (e.g., delay penalty).
             inv_temp (float): Softmax inverse temperature for action selection.
             rate_stop_trial (float): Prior probability of stop trials (default typically 1/6).
+            tau (float): Non-decision time.
         """
         # Hazard function parameter
-        self.lamb = 0.2
+        self.lamb = 0.1
         # Prior probability of a stop trial (r)
         self.rate_stop_trial = rate_stop_trial
 
@@ -44,6 +45,7 @@ class POMDP:
 
         # Softmax inverse temperature
         self.inv_temp = inv_temp
+        self.tau = int(round(tau))  # Added Non-decision time
 
         # Discretization parameters
         self.bins = 80
@@ -106,6 +108,7 @@ class POMDP:
             p1 = [null * (1 - precision), null * precision, 1 - null]
 
         return p0, p1
+
 
     def _generate_hazard(self, t_step):
         """

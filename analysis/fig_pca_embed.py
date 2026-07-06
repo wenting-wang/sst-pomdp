@@ -8,39 +8,59 @@ import plotly.graph_objects as go
 from plotly.offline import plot
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+import argparse
 
-# ==========================================
-# 0. CONFIGURATION & CONSTANTS
-# ==========================================
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Generate PCA Embeddings Plot")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
+
+DEMO_MODE = not args.prod
+
+# =============================================================================
+# 1. CONFIGURATION & CONSTANTS
+# =============================================================================
 
 # --- Directory Setup ---
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 
-DATA_DIR = PROJECT_ROOT / "data"
-OUT_DIR = PROJECT_ROOT / "outputs"
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    FILE_EMBEDDINGS = PROJECT_ROOT / "data" / "example_embeddings.csv"
+    FILE_STATS = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
+    FILE_POSTERIOR = PROJECT_ROOT / "data" / "example_params_posteriors.csv"
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    FILE_EMBEDDINGS = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    FILE_STATS = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
+    FILE_POSTERIOR = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
 
-# Ensure output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# --- Input Files ---
-FILE_EMBEDDINGS = DATA_DIR / "example_embeddings.csv"
-FILE_STATS = DATA_DIR / "example_clinical_behavior.csv"
-FILE_POSTERIOR = DATA_DIR / "example_params_posteriors.csv"
 
 # --- Output Files ---
 PCA_2D = OUT_DIR / "fig_pca_embed_2d.png"
 PCA_3D = OUT_DIR / "fig_pca_embed_3d.html"
 
-# --- Plot Configurations ---
+# ==========================================
+# 2. PLOT CONFIGURATIONS
+# ==========================================
 # LaTeX formatted names for Matplotlib (2D)
 DISPLAY_NAMES_2D = {
-    'q_d_n': r"$\chi'$",
-    'q_d': r"$\chi$",
-    'q_s_n': r"$\delta'$",
-    'q_s': r"$\delta$",
-    'cost_stop_error': r"$c_{\mathrm{se}}$",
-    'inv_temp': r"$\varphi$",
+    'q_d': r"$\chi$ (Go Precision)",
+    'q_s': r"$\delta$ (Stop Precision)",
+    'cost_stop_error': r"$c_{\mathrm{se}}$ (Stop Error Cost)",
+    'cost_time': r"$c_{\mathrm{t}}$ (Time Cost)",
+    'tau': r"$\tau$ (Non-decision Time)",
+    'cost_go_error': r"$c_{\mathrm{ge}}$ (Go Error Cost)",
     'adhd': 'ADHD Score',
     'mrt_gs': 'GSRT',
     'ssrt': 'SSRT',
@@ -48,12 +68,12 @@ DISPLAY_NAMES_2D = {
 
 # Descriptive names for Plotly (3D Dropdowns)
 DISPLAY_NAMES_3D = {
-    'q_d_n': "Chi' (Go Noise)",
-    'q_d': "Chi (Go Precision)",
-    'q_s_n': "Sigma' (Stop Noise)",
-    'q_s': "Sigma (Stop Precision)",
-    'cost_stop_error': "Stop Cost ",
-    'inv_temp': "Inverse Temperature (Phi)",
+    'q_d': r"$\chi$ (Go Precision)",
+    'q_s': r"$\delta$ (Stop Precision)",
+    'cost_stop_error': r"$c_{\mathrm{se}}$ (Stop Error Cost)",
+    'cost_time': r"$c_{\mathrm{t}}$ (Time Cost)",
+    'tau': r"$\tau$ (Non-decision Time)",
+    'cost_go_error': r"$c_{\mathrm{ge}}$ (Go Error Cost)",
     'adhd': 'ADHD Score',
     'mrt_gs': 'GSRT',
     'ssrt': 'SSRT',
@@ -61,7 +81,7 @@ DISPLAY_NAMES_3D = {
 
 TARGETS = [
     'q_d', 'q_s','cost_stop_error', 
-    'q_d_n', 'q_s_n','inv_temp',
+    'cost_go_error', 'cost_time', 'tau',
     'adhd', 'mrt_gs', 'ssrt'
 ]
 
@@ -84,7 +104,6 @@ def load_data():
     Loads embeddings, behavioral stats, and posterior summaries.
     Merges them into a single DataFrame.
     """
-    print(f"Loading data from {DATA_DIR}...")
     
     # Verify files exist before loading
     missing_files = []
@@ -99,6 +118,10 @@ def load_data():
     df_emb = pd.read_csv(FILE_EMBEDDINGS)
     df_stats = pd.read_csv(FILE_STATS)
     df_post = pd.read_csv(FILE_POSTERIOR)
+
+    df_emb['subject_id'] = df_emb['subject_id'].astype(str).str.replace(r'^NDAR_', '', regex=True)
+    df_stats['subject_id'] = df_stats['subject_id'].astype(str).str.replace(r'^NDAR_', '', regex=True)
+    df_post['subject_id'] = df_post['subject_id'].astype(str).str.replace(r'^NDAR_', '', regex=True)
 
     # Type Conversion for merging consistency
     df_emb['year'] = df_emb['year'].astype(str)
@@ -127,7 +150,7 @@ def get_pca_coordinates(df, n_components=3):
     Helper to run PCA on embedding columns and return the transformed data.
     """
     # Adjust this if your embeddings have a different naming convention (e.g., emb_0 to emb_63)
-    embedding_cols = [f'emb_{i}' for i in range(64)]
+    embedding_cols = [f'emb_{i}' for i in range(128)]
     
     # Ensure all embedding columns exist in the DataFrame
     missing_cols = [col for col in embedding_cols if col not in df.columns]
@@ -294,7 +317,7 @@ if __name__ == "__main__":
         # 2. Run Visualization Parts
         run_pca_2d(df_data.copy())
         # Uncomment the line below to also generate the 3D interactive plot
-        run_pca_3d(df_data.copy())
+        # run_pca_3d(df_data.copy())
         
     except Exception as e:
         print(f"An error occurred: {e}")

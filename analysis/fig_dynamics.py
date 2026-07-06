@@ -1,12 +1,13 @@
+import numpy as np
 import pandas as pd
 import sys
 from pathlib import Path
+import argparse
 
 # --- Path Setup ---
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 
-# Set up paths to import local modules (e.g., from sst-pomdp-main/core/)
 sys.path.append(str(PROJECT_ROOT))
 
 from core.models import POMDP
@@ -14,40 +15,65 @@ from core import simulation
 from core import plotting
 
 # =============================================================================
-# CONFIGURATION
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Run POMDP Dynamics Simulation")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
+
+DEMO_MODE = not args.prod
+
+# =============================================================================
+# 1. CONFIGURATION & PATHS
 # =============================================================================
 
-# Define base directories relative to the project root
-DATA_DIR = PROJECT_ROOT / "data"
-OUT_DIR = PROJECT_ROOT / "outputs"
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    DATA_DIR = PROJECT_ROOT / "data"
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
+    SUBJECT_ID = 'EXAMPLE_SUB_001'
+    
+    # Placeholders to prevent NameError
+    RAW_DATA_DIR = DATA_DIR / 'example_processed_data'
+    USE_PREPROCESSING = False
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    DATA_DIR = PROJECT_ROOT / "data"
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    SUBJECT_ID = 'NDAR_INVRUVFBX1L'
+    
+    # Processing settings for local data
+    RAW_DATA_DIR = Path("/Users/w/Desktop/data/sst_valid_base")
+    USE_PREPROCESSING = True 
 
-# Ensure the output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True) 
 
-# Input Files
-# Points to the example dummy data provided in the repository
-PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
-
-# Simulation Settings
-# Use an example subject ID that matches the dummy data
-SUBJECT_ID = 'EXAMPLE_SUB_001'
-
+# =============================================================================
+# 2. MODEL PARAMETERS
+# =============================================================================
 # Fixed parameters (Constants that do not vary by subject)
 FIXED_PARAMS = {
-    'cost_go_error': 1.0,
-    'cost_go_missing': 1.0,
-    'cost_time': 0.001,
-    'rate_stop_trial': 1/6
+    "inv_temp": 44.6534,
+    "q_s_n": 0.0787,
+    "rate_stop_trial": 1.0 / 6.0,
+    "q_d_n": 0.0798,
+    "cost_go_missing": 15.7821,
 }
 
 # Parameters to extract from the CSV
 DYNAMIC_PARAMS = [
-    'q_d_n',
-    'q_d',
-    'q_s_n',
-    'q_s',
-    'cost_stop_error',
-    'inv_temp'
+    "q_d",
+    "q_s",
+    "tau",
+    "cost_stop_error",
+    "cost_go_error",
+    "cost_time"
 ]
 
 # =============================================================================
@@ -92,6 +118,9 @@ def main():
     # 1. Load Parameters
     try:
         params = get_subject_params(SUBJECT_ID, PARAMS_CSV)
+        print('tau before:', params['tau'])
+        # params['tau'] = int(params['tau']) 
+        params['tau'] = 0
         print("Parameters loaded successfully:")
         for k, v in params.items():
             print(f"  {k}: {v}")
@@ -107,46 +136,54 @@ def main():
     pomdp.value_iteration_tensor()
 
     # 3. Run Simulations
-    print("Running Simulations...")
+    # print("Running Simulations...")
     # Go Trials
     out_go = simulation.simu_trial_batch(
         model=pomdp,
         true_go_state='right',
         true_stop_state='nonstop',
         ssd=None,
-        batch_size=1000,
+        batch_size=6000,
         verbose=True
     )
+    
+    gm_trials = [trial for trial in out_go if trial['result'] == 'GM']
+    if len(gm_trials) >= 4:
+        print(f"Successfully found {len(gm_trials)} GM trials in the batch.")
+    else:
+        print(f"Warning: Only found {len(gm_trials)} GM trials. The model's GM probability is too low.")
 
     # Stop Trials
     out_stop = simulation.simu_trial_batch(
         model=pomdp,
         true_go_state='right',
         true_stop_state='stop',
-        ssd=10,
-        batch_size=1000,
+        ssd=7,
+        batch_size=1200,
         verbose=True
     )
 
     # 4. Plotting
     print("Generating Plots...")
     plotting.plot_belief(
-        out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'fig_belief_states.png'
+        out_go, out_stop, show_cnt=4, saveto=OUT_DIR / 'fig_belief_states.png'
     )
 
     plotting.plot_action_value(
-        out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'fig_action_values.png'
+        out_go, out_stop, show_cnt=4, saveto=OUT_DIR / 'fig_action_values.png'
     )
 
-    plotting.plot_stop_prior_context(
+    
+    plotting.plot_stop_prior_sensitivity(
         model=pomdp,
         params=params,
-        rates=(0.05, 1/6, 0.5, 0.75, 0.95),
-        ssd=10,
-        n_batch=500,     # For timecourses
-        n_session=1000,  # For behavior
-        saveto=OUT_DIR / "fig_stop_prior_effects.png",
+        rates=(0.05, 0.10, 1/6, 0.20, 0.25, 0.30),
+        ssds=np.arange(2, 35, 4),
+        n_session=600,
+        saveto=OUT_DIR / "fig_stop_prior_sensitivity.png", 
     )
+    
+    
     
     ############### PLOS CB TIFF ###############
     
@@ -158,15 +195,6 @@ def main():
     #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.tiff'
     # )
     
-    # plotting.plot_stop_prior_context(
-    #     model=pomdp,
-    #     params=params,
-    #     rates=(0.05, 1/6, 0.35, 0.55, 0.80),
-    #     ssd=10,
-    #     n_batch=500,
-    #     n_session=1000,
-    #     saveto=OUT_DIR / "stop_prior_context.tiff", 
-    # )
 
     print("Done.")
 

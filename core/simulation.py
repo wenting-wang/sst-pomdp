@@ -113,12 +113,23 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
         policy_seq.append(action)
 
         if action != 2 and not ever_act:
+            # simu_action = action
+            # rt = t_step
+            # ever_act = True
+            
             simu_action = action
-            rt = t_step
+            # The decision was made at t_step. The actual physical keypress happens tau steps later.
+            rt = t_step + model.tau  
             ever_act = True
 
     # --- Outcome decoding ---
     simu_action = {0: 'left', 1: 'right', 2: 'wait'}.get(simu_action)
+    
+    if rt is not None and rt >= horizon-1:
+        simu_action = 'wait' 
+        rt = None
+        ever_act = False     
+    
     if true_stop_state == 'nonstop':
         if simu_action == true_go_state:
             result = 'GS'
@@ -149,6 +160,7 @@ def simu_trial(model, true_go_state, true_stop_state, ssd, verbose=False):
     else:
         return (result, rt, ssd)
 
+
 def simu_trial_batch(model, true_go_state, true_stop_state, ssd, batch_size, verbose=False):
     """
     Simulate a batch of Stop Signal Task (SST) trials under identical conditions.
@@ -171,6 +183,7 @@ def simu_trial_batch(model, true_go_state, true_stop_state, ssd, batch_size, ver
         for _ in range(batch_size)
     ]
     return trials
+
 
 def simu_task(model, verbose=False):
     """

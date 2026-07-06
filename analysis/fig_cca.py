@@ -6,23 +6,50 @@ from sklearn.preprocessing import StandardScaler
 from scipy.stats import pearsonr
 from pathlib import Path
 from matplotlib.gridspec import GridSpec
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+from joblib import Parallel, delayed
+import argparse
+
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Run Canonical Correlation Analysis (CCA)")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
+
+DEMO_MODE = not args.prod
 
 # =============================================================================
 # 1. CONFIGURATION & PATHS
 # =============================================================================
-
-# 1. Get the directory of this script (the 'analysis' folder)
 current_dir = Path(__file__).resolve().parent
-# 2. Go one level up to get the repository root
 repo_root = current_dir.parent
 
-# 3. Define paths relative to the repository root
-OUT_DIR = repo_root / 'outputs'
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    OUT_DIR = repo_root / 'outputs'
+    EMBED_CSV = repo_root / 'data' / 'example_embeddings.csv'
+    STATS_CSV = repo_root / 'data' / 'example_clinical_behavior.csv'
+    
+    # Placeholders to prevent NameError in demo mode
+    RAW_DATA_DIR = repo_root / 'data' / 'example_processed_data'
+    USE_PREPROCESSING = False
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    OUT_DIR = repo_root / 'outputs'
+    EMBED_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    STATS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
+    
+    # Processing settings for local data
+    RAW_DATA_DIR = Path("/Users/w/Desktop/data/sst_valid_base")
+    USE_PREPROCESSING = True 
+
 OUT_DIR.mkdir(parents=True, exist_ok=True) 
-
-EMBED_CSV = repo_root / 'data' / 'example_embeddings.csv'
-STATS_CSV = repo_root / 'data' / 'example_clinical_behavior.csv'
-
 OUTPUT_PLOT = OUT_DIR / "fig_cca.png"
 
 # =============================================================================
@@ -55,7 +82,7 @@ df_stats['subject_id'] = df_stats['subject_id'].astype(str)
 df = pd.merge(df_emb, df_stats, on=['subject_id', 'year'], how='inner')
 print(f"Data merged. Total subjects: {len(df)}")
 
-emb_cols = [f'emb_{i}' for i in range(64)]
+emb_cols = [f'emb_{i}' for i in range(128)]
 target_stats = [
     'mrt_gs', 'perc_gs', 'perc_gm', 'mrt_ge', 
     'ssrt', 'perc_ss', 'mrt_se',
@@ -83,17 +110,47 @@ Y_std = StandardScaler().fit_transform(Y_clean)
 # =============================================================================
 # 4. RUN CCA
 # =============================================================================
-
-print("Running CCA...")
-cca = CCA(n_components=1)
+print("Running CCA on actual data...")
+n_components = Y_std.shape[1] 
+cca = CCA(n_components=n_components)
 cca.fit(X_std, Y_std)
 X_c, Y_c = cca.transform(X_std, Y_std)
 
-corr, p_val = pearsonr(X_c[:, 0], Y_c[:, 0])
+# Calculate true Pearson correlation coefficients
+corrs = [pearsonr(X_c[:, i], Y_c[:, i])[0] for i in range(n_components)]
 
-print("\nCCA RESULTS:")
-print(f"Canonical Correlation (r): {corr:.4f}")
-print(f"P-value: {p_val:.4e}\n")
+print("Running Permutation Test (1000 iterations) using parallel processing...")
+
+def single_permutation(X, Y, n_comp):
+    """Helper function to run a single iteration on a CPU core."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=ConvergenceWarning)
+        
+        # Shuffle Y
+        Y_shuffled = np.random.permutation(Y)
+        
+        # TRICK 1: Limit max_iter to 20 for noise data to drastically save time.
+        cca_null = CCA(n_components=n_comp, max_iter=20)
+        cca_null.fit(X, Y_shuffled)
+        X_c_null, Y_c_null = cca_null.transform(X, Y_shuffled)
+        
+        return [pearsonr(X_c_null[:, j], Y_c_null[:, j])[0] for j in range(n_comp)]
+
+n_permutations = 1000
+
+# TRICK 2: Run the loop in parallel. n_jobs=-1 means use ALL available CPU cores.
+null_corrs_list = Parallel(n_jobs=-1, verbose=5)(
+    delayed(single_permutation)(X_std, Y_std, n_components) for _ in range(n_permutations)
+)
+
+null_corrs = np.array(null_corrs_list)
+p_values = np.mean(null_corrs >= np.array(corrs), axis=0)
+
+print("\n--- CCA RESULTS (All Components) ---")
+for i in range(n_components):
+    sig_star = "***" if p_values[i] < 0.001 else "**" if p_values[i] < 0.01 else "*" if p_values[i] < 0.05 else ""
+    print(f"Variate {i+1:2d}: r = {corrs[i]:.4f}, p = {p_values[i]:.4f} {sig_star}")
+print("------------------------------------\n")
 
 # =============================================================================
 # 5. VISUALIZATION
@@ -142,8 +199,8 @@ axA.set_yticks(np.arange(len(sorted_Y_names)))
 axA.set_yticklabels(sorted_Y_names)
 axA.text(-0.205, 1.03, 'Behavioral Metrics', transform=axA.transAxes, ha='left', va='bottom', fontsize=9, weight='regular')
 
-axA.set_xticks([0, 15, 31, 47, 63])
-axA.set_xticklabels(['1', '16', '32', '48', '64'])
+axA.set_xticks([0, 31, 63, 95, 127])
+axA.set_xticklabels(['1', '32', '64', '96', '128'])
 axA.set_xlabel('Latent Behavioral Embeddings (Sorted)', weight='regular')
 
 cbar = fig.colorbar(cax, ax=axA, orientation='vertical', fraction=0.03, pad=0.02)
@@ -175,11 +232,43 @@ axC.set_xlabel('Latent Behavioral Embeddings (Sorted)', weight='regular')
 axC.spines['top'].set_visible(False)
 axC.spines['right'].set_visible(False)
 
-axC.set_xticks([0, 15, 31, 47, 63])
-axC.set_xticklabels(['1', '16', '32', '48', '64'])
+axC.set_xticks([0, 31, 63, 95, 127])
+axC.set_xticklabels(['1', '32', '64', '96', '128'])
 axC.axhline(0, color='black', linewidth=1)
 axC.text(-0.17, 1.05, 'C', transform=axC.transAxes, size=14, weight='bold')
 
 # Final Output & Save
 print(f"Saving figure to: {OUTPUT_PLOT}")
 plt.savefig(OUTPUT_PLOT, dpi=300, bbox_inches='tight', format='png')
+
+# Loading data...
+# Data merged. Total subjects: 3565
+# Running CCA on actual data...
+# Running Permutation Test (1000 iterations) using parallel processing...
+# [Parallel(n_jobs=-1)]: Using backend LokyBackend with 8 concurrent workers.
+# [Parallel(n_jobs=-1)]: Done   2 tasks      | elapsed:    5.3s
+# [Parallel(n_jobs=-1)]: Done  56 tasks      | elapsed:   20.3s
+# [Parallel(n_jobs=-1)]: Done 146 tasks      | elapsed:   49.5s
+# [Parallel(n_jobs=-1)]: Done 272 tasks      | elapsed:  1.5min
+# [Parallel(n_jobs=-1)]: Done 434 tasks      | elapsed:  2.5min
+# [Parallel(n_jobs=-1)]: Done 632 tasks      | elapsed:  3.9min
+# [Parallel(n_jobs=-1)]: Done 866 tasks      | elapsed:  5.8min
+# [Parallel(n_jobs=-1)]: Done 1000 out of 1000 | elapsed:  6.8min finished
+
+# --- CCA RESULTS (All Components) ---
+# Variate  1: r = 0.9953, p = 0.0000 ***
+# Variate  2: r = 0.9826, p = 0.0000 ***
+# Variate  3: r = 0.9283, p = 0.0000 ***
+# Variate  4: r = 0.8675, p = 0.0000 ***
+# Variate  5: r = 0.6930, p = 0.0000 ***
+# Variate  6: r = 0.6254, p = 0.0000 ***
+# Variate  7: r = 0.5266, p = 0.0000 ***
+# Variate  8: r = 0.4154, p = 0.0000 ***
+# Variate  9: r = 0.3351, p = 0.0000 ***
+# Variate 10: r = 0.2871, p = 0.0000 ***
+# Variate 11: r = 0.2628, p = 0.0000 ***
+# Variate 12: r = 0.2088, p = 0.0000 ***
+# Variate 13: r = 0.1916, p = 0.0000 ***
+# Variate 14: r = 0.1789, p = 0.0000 ***
+# Variate 15: r = 0.1692, p = 0.0000 ***
+# ------------------------------------

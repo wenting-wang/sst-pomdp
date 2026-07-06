@@ -3,30 +3,44 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from typing import Iterable, Optional, Union, List, Tuple
+import argparse
 
-# --- Configuration & Paths ---
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Generate Demographics Counts Table")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
 
-# CURRENT_DIR is the 'analysis' folder where this script lives
+DEMO_MODE = not args.prod
+
+# =============================================================================
+# 1. CONFIGURATION & PATHS
+# =============================================================================
 CURRENT_DIR = Path(__file__).resolve().parent
-
-# PROJECT_ROOT is the parent folder containing both 'analysis' and 'data'
 PROJECT_ROOT = CURRENT_DIR.parent
 
-DATA_DIR = PROJECT_ROOT / "data"
-OUT_DIR = PROJECT_ROOT / "outputs"
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    DATA_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    DATA_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
 
-# Ensure output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# Input: Replace with your actual dataset filename
-# Expected columns: 'year', 'adhd', 'sex', 'iq', 'adhd_med_flag'
-DATA_CSV = DATA_DIR / "example_clinical_behavior.csv"
 
 # Output: LaTeX table file
 OUTPUT_TEX = OUT_DIR / "tab_demo_counts.tex"
 
-# --- Helper Functions ---
-
+# =============================================================================
+# 2. HELPER FUNCTIONS
+# =============================================================================
 def normalize_group_column(series: pd.Series, kind: str) -> pd.Series:
     """
     Standardizes categorical values for display in the LaTeX table.

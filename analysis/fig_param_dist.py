@@ -4,43 +4,64 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import MaxNLocator
 import traceback
+import numpy as np
+from scipy.stats import gaussian_kde
+import argparse
 
-# --- Configuration & Paths ---
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Plot Parameter Distributions")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Usage: run `python script.py --prod`. Defaults to DEMO mode using example data if omitted.'
+)
+args, unknown = parser.parse_known_args()
 
-# --- Directory Setup ---
+DEMO_MODE = not args.prod
+
+# =============================================================================
+# 1. CONFIGURATION & PATHS
+# =============================================================================
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 
-DATA_DIR = PROJECT_ROOT / "data"
-OUT_DIR = PROJECT_ROOT / "outputs"
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    PARAMS_CSV = PROJECT_ROOT / "data" / "example_params_posteriors.csv"
+    STATS_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    OUT_DIR = PROJECT_ROOT / "outputs"
+    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    STATS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
 
-# Ensure output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# --- Input Files ---
-PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
-STATS_CSV = DATA_DIR / "example_clinical_behavior.csv"
-
-# --- Output ---
 OUTPUT_PLOT = OUT_DIR / "fig_param_dist.png"
 
+# =============================================================================
+# 2. PLOT SETTINGS
+# =============================================================================
 PLOT_PARAMS = [
     'q_d',              # Chi
-    'q_s',              # Delta
-    'cost_stop_error',  # C_se
-    'q_d_n',            # Chi'
-    'q_s_n',            # Delta'
-    'inv_temp'          # Varphi
+    'cost_stop_error',
+    'cost_time',        # Time Cost 
+    'q_s',              # Delta 
+    'cost_go_error',     # Go Error Cost
+    'tau',              # Non-decision time
 ]
 
 PARAM_DISPLAY_NAMES = {
-    'q_d_n': r"$\chi'$ (Go Null)",
     'q_d': r"$\chi$ (Go Precision)",
-    'q_s_n': r"$\delta'$ (Stop Null)",
     'q_s': r"$\delta$ (Stop Precision)",
     'cost_stop_error': r"$c_{\mathrm{se}}$ (Stop Error Cost)",
-    'inv_temp': r"$\varphi$ (Inverse Temperature)",
+    'cost_time': r"$c_{\mathrm{t}}$ (Time Cost)",
+    'tau': r"$\tau$ (Non-decision Time)",
+    'cost_go_error': r"$c_{\mathrm{ge}}$ (Go Error Cost)"
 }
 
 # Plot Colors
@@ -73,6 +94,7 @@ def load_and_merge_data(params_path, stats_path, params_to_keep):
 
     # 1. Load Parameters
     df_param = pd.read_csv(params_path)
+    
     if 'subject_year' in df_param.columns:
         df_param = df_param.rename(columns={"subject_year": "year"})
     
@@ -87,6 +109,7 @@ def load_and_merge_data(params_path, stats_path, params_to_keep):
     else:
         raise ValueError("Cannot figure out pivot column (expected 'index' or 'param').")
         
+    df_pivot['subject_id'] = df_pivot['subject_id'].str.replace('NDAR_', '', regex=False)
     df_pivot.columns.name = None
     
     # 2. Load Stats
@@ -120,6 +143,15 @@ def plot_parameter_distributions(df, params, output_path):
     print("PARAMETER STATISTICS")
     print("="*40)
 
+    HARDCODED_RANGES = {
+        'q_d': (0.55, 0.85),
+        'cost_stop_error': (0, 17.0),
+        'cost_time': (0.0, 0.19),
+        'q_s': (0.55, 1.0),
+        'cost_go_error': (0, 28.0),
+        'tau': (2.5, 12.5)
+    }
+
     for i, param in enumerate(params):
         ax = axes[i]
         
@@ -129,17 +161,36 @@ def plot_parameter_distributions(df, params, output_path):
             continue
             
         data = df[param].dropna()
+        
         if data.empty:
             ax.axis('off')
             continue
+            
+        # --- Apply Hardcoded Ranges ---
+        view_min, view_max = HARDCODED_RANGES.get(param, (data.min(), data.max()))
+            
+        # --- Discrete vs Continuous Logic ---
+        is_discrete = False
+        if param == 'tau':
+            data = data.astype(int)
+            is_discrete = True
         
         # --- Calculate Statistics ---
         mean_val = data.mean()
         median_val = data.median()
-        # Mode calculation (taking the first mode if multiple exist)
-        mode_val = data.round(3).mode()
-        mode_val = mode_val[0] if not mode_val.empty else median_val
-
+        
+        if is_discrete:
+            mode_series = data.mode()
+            mode_val = mode_series[0] if not mode_series.empty else median_val
+        else:
+            try:
+                kde = gaussian_kde(data)
+                x_grid = np.linspace(data.min(), data.max(), 1000)
+                kde_y = kde.evaluate(x_grid)
+                mode_val = x_grid[np.argmax(kde_y)]
+            except Exception:
+                mode_val = median_val
+        
         # --- Print to Console ---
         label = PARAM_DISPLAY_NAMES.get(param, param)
         print(f"Variable: {label}")
@@ -147,18 +198,17 @@ def plot_parameter_distributions(df, params, output_path):
         print(f"  Median: {median_val:.4f}")
         print(f"  Mode:   {mode_val:.4f}")
         print("-" * 20)
-
-        # --- Handle Bin Widths ---
-        # Lock bin_range to [0,1] for parameters starting with 'q_'
-        if param.startswith('q_'):
-            current_bin_range = (0, 1)
-        else:
-            current_bin_range = None # Default: use data min/max
         
         # --- Plot Histogram ---
-        sns.histplot(data, bins=BINS, binrange=current_bin_range,
-                     color=FILL_COLOR, edgecolor=EDGE_COLOR, 
-                     linewidth=0.3, stat="density", ax=ax, alpha=0.4)
+        if is_discrete:
+            sns.histplot(data, discrete=True,
+                         color=FILL_COLOR, edgecolor=EDGE_COLOR, 
+                         linewidth=0.3, stat="density", ax=ax, alpha=0.4)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        else:
+            sns.histplot(data, bins=BINS, binrange=(view_min, view_max),
+                         color=FILL_COLOR, edgecolor=EDGE_COLOR, 
+                         linewidth=0.3, stat="density", ax=ax, alpha=0.4)
 
         # --- Add Vertical Lines ---
         ax.axvline(mean_val, color=COLOR_MEAN, linestyle='--', linewidth=1.2, zorder=5)
@@ -168,10 +218,9 @@ def plot_parameter_distributions(df, params, output_path):
         # --- Formatting ---
         ax.set_xlabel(label, labelpad=5)
         
-        if param.startswith('q_'):
-            ax.set_xlim(0, 1)
+        # Force X-axis limits to match the hardcoded view
+        ax.set_xlim(view_min, view_max)
         
-        # Y-Axis Label (Only show on left column)
         if i % ncols == 0:
             ax.set_ylabel("Density")
         else:
@@ -189,6 +238,9 @@ def plot_parameter_distributions(df, params, output_path):
                   frameon=False, loc='best')
 
         sns.despine(ax=ax)
+        
+    for j in range(len(params), len(axes)):
+        axes[j].set_visible(False)
 
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.25, hspace=0.55)
