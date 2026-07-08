@@ -232,6 +232,6 @@ def simu_task(model, verbose=False):
         outcomes.append(trial_outcome)
 
         if true_stop_state == 'stop':
-            last_stop_result = trial_outcome[0] # result
+            last_stop_result = trial_outcome['result'] if verbose else trial_outcome[0]
 
     return outcomes

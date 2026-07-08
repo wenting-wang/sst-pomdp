@@ -26,7 +26,8 @@ import pandas as pd
 # ==============================================================================
 # --- Base Directory Setup ---
 # Users should update this path to point to their local data folder
-BASE_DIR = Path("/kyb/agpd/wwang/data_abcd/")  # <-- UPDATE THIS PATH
+# BASE_DIR = Path("/kyb/agpd/wwang/data_abcd/")  # <-- UPDATE THIS PATH
+BASE_DIR = Path("/Users/w/Desktop/data/")  # <-- UPDATE THIS PATH
 
 # --- Input Files & Directories ---
 INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"

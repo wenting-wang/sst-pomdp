@@ -184,12 +184,12 @@ def main():
     
     run_command(
         "2.2 Cross-Validation Check", 
-        "hpc/cv_out_of_sample.py", 
+        "hpc/eval_cv.py", 
         extra_args=cv_args
     )
 
     # --- 2.3 Embedding Extraction Check ---
-    # Note: Adjust --model_path if your embedding.py expects just the filename instead of a relative path.
+    # Note: Adjust --model_path if your eval_cv.py expects just the filename instead of a relative path.
     emb_args = [
         "--csv", filter_csv_path,
         "--folder", tesbi_data_folder,
@@ -199,7 +199,7 @@ def main():
     
     run_command(
         "2.3 Embedding Extraction Check", 
-        "hpc/embedding.py", 
+        "hpc/eval_cv.py", 
         extra_args=emb_args,
         expected_output=f"outputs/embeddings_quick_check_{TEST_MODEL_NAME}.csv"
     )

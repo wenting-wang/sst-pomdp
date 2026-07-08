@@ -3,9 +3,9 @@
 
 Full Data Attrition Report for the ABCD SST Dataset.
 
-This script replaces the previous QC report by generating the complete 
-exclusion cascade (Rules 1-8) directly from raw data, and appending the 
-final clinical/demographic exclusion step (Rule 9).
+This script calculates independent exclusion counts for all QC criteria. 
+Note: Exclusion categories are NOT mutually exclusive. A single subject 
+may fail multiple criteria and be counted in several rows.
 """
 
 import os
@@ -18,15 +18,18 @@ import pandas as pd
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
+# BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
+BASE_DIR = Path("/Users/w/Desktop/data/")  # <-- UPDATE THIS PATH
+
 INPUT_CSV = BASE_DIR / "mri_y_tfmr_sst_beh.csv"
 RAW_DATA_DIR = BASE_DIR / "abcd_sst_tlb01"
 VALID_TXT = BASE_DIR / "sst_valid_filenames.txt"
-FINAL_DATA_CSV = BASE_DIR / 'clinical_behavior.csv'
+FINAL_DATA_CSV = BASE_DIR / "clinical_behavior.csv"
+UNFILTERED_STATS_CSV = BASE_DIR / "unfiltered_behavioral_stats.csv"
 
 RT_THRESHOLD = 200
 MAX_ALLOWED_COUNT = 3
-
+THRESHOLD = 0.1
 
 def check_rt_status(zip_path: Path) -> str:
     """Checks file availability and RT quality directly from raw zip."""
@@ -55,11 +58,15 @@ def check_rt_status(zip_path: Path) -> str:
 
 def main():
     print("Loading metadata and evaluating attrition criteria...")
+    if not INPUT_CSV.exists():
+        print(f"Error: Input CSV not found at {INPUT_CSV}")
+        return
+
     df = pd.read_csv(INPUT_CSV, low_memory=False)
     df_baseline = df[df['eventname'].str.contains('baseline', case=False, na=False)].copy()
     total_baseline = len(df_baseline)
 
-    # --- Rules 1-6 ---
+    # --- Rules 1-6 (Independent Masks) ---
     criteria_masks = {
         "(1) Trial Counts": df_baseline['tfmri_sst_beh_performflag'] == 1,
         "(2) No Switching": df_baseline['tfmri_sst_beh_switchflag'] == 0,
@@ -70,7 +77,7 @@ def main():
                                 (df_baseline['tfmri_sst_all_beh_s_nt'] == 60)
     }
 
-    # --- Rules 7-8 ---
+    # --- Rules 7-8 (Independent Checks) ---
     missing_data_mask = []
     rt_fail_mask = []
     
@@ -82,10 +89,7 @@ def main():
         
         status = check_rt_status(file_path)
         
-        # Criterion 7 check
         missing_data_mask.append(status != 'MISSING')
-        
-        # Criterion 8 check
         rt_fail_mask.append(status == 'PASS')
 
     s_missing = pd.Series(missing_data_mask, index=df_baseline.index)
@@ -93,32 +97,63 @@ def main():
 
     # --- Consolidate Statistics ---
     stats_rows = []
+    
+    # 1. Rules 1-6
     for name, mask in criteria_masks.items():
         n_failed = (~mask).sum()
         stats_rows.append({"Criteria": name, "Excluded_N": n_failed, "Excluded_Pct": (n_failed / total_baseline) * 100})
 
+    # 2. Rule 7
     n_missing = (~s_missing).sum()
     stats_rows.append({"Criteria": "(7) Missing Raw Data", "Excluded_N": n_missing, "Excluded_Pct": (n_missing / total_baseline) * 100})
 
+    # 3. Rule 8
     n_rt_fail_only = ((s_missing) & (~s_rt_pass)).sum()
     stats_rows.append({"Criteria": "(8) RT < 200ms Check (Found Files)", "Excluded_N": n_rt_fail_only, "Excluded_Pct": (n_rt_fail_only / total_baseline) * 100})
 
-    # --- Rule 9 ---
-    with open(VALID_TXT, 'r') as f:
-        valid_files_count = sum(1 for line in f if line.strip())
+    # --- Rules 9-10 (Independent Behavioral Checks) ---
+    valid_after_behavioral = 0
+    if UNFILTERED_STATS_CSV.exists():
+        df_unfiltered_stats = pd.read_csv(UNFILTERED_STATS_CSV)
         
-    df_final = pd.read_csv(FINAL_DATA_CSV)
-    final_count = len(df_final)
-    missing_demo = valid_files_count - final_count
+        # Rule 9
+        n_fail_gm = (df_unfiltered_stats['perc_gm'] > THRESHOLD).sum()
+        stats_rows.append({"Criteria": f"(9) Go Misses > {THRESHOLD*100:.0f}%", "Excluded_N": n_fail_gm, "Excluded_Pct": (n_fail_gm / total_baseline) * 100})
+        
+        # Rule 10
+        n_fail_ge = (df_unfiltered_stats['perc_ge'] > THRESHOLD).sum()
+        stats_rows.append({"Criteria": f"(10) Go Errors > {THRESHOLD*100:.0f}%", "Excluded_N": n_fail_ge, "Excluded_Pct": (n_fail_ge / total_baseline) * 100})
+        
+        # To calculate how many proceed to clinical merge, we need the logical AND of passing both
+        valid_after_behavioral = len(df_unfiltered_stats[(df_unfiltered_stats['perc_gm'] <= THRESHOLD) & 
+                                                         (df_unfiltered_stats['perc_ge'] <= THRESHOLD)])
+    else:
+        print("Warning: unfiltered_behavioral_stats.csv not found. Run 03_build_dataset.py first.")
+        if VALID_TXT.exists():
+            with open(VALID_TXT, 'r') as f:
+                valid_after_behavioral = sum(1 for line in f if line.strip())
+
+    # --- Rule 11 (Clinical Data Missing) ---
+    final_count = 0
+    if FINAL_DATA_CSV.exists():
+        df_final = pd.read_csv(FINAL_DATA_CSV)
+        final_count = len(df_final)
+    else:
+        print("Warning: clinical_behavior.csv not found.")
+
+    # The difference between subjects entering the clinical merge step and the final dataset size
+    missing_demo = valid_after_behavioral - final_count
 
     stats_rows.append({
-        "Criteria": "(9) Incomplete Demographic/Clinical", 
+        "Criteria": "(11) Incomplete Demographic/Clinical", 
         "Excluded_N": missing_demo, 
         "Excluded_Pct": (missing_demo / total_baseline) * 100
     })
 
     # --- Print Formatting ---
     print("\n" + "="*75)
+    print("QC ATTRITION REPORT (Independent Counts)")
+    print("="*75)
     print(f"{'Criteria ID':<38} | {'Excluded (N)':<12} | {'Excluded (%)':<10}")
     print("-" * 75)
     for row in stats_rows:
@@ -131,6 +166,8 @@ if __name__ == "__main__":
     main()
 
 # ===========================================================================
+# QC ATTRITION REPORT (Independent Counts)
+# ===========================================================================
 # Criteria ID                            | Excluded (N) | Excluded (%)
 # ---------------------------------------------------------------------------
 # (1) Trial Counts                       | 1392         | 12.1%
@@ -141,7 +178,11 @@ if __name__ == "__main__":
 # (6) Complete Session                   | 252          | 2.2%
 # (7) Missing Raw Data                   | 1299         | 11.3%
 # (8) RT < 200ms Check (Found Files)     | 3058         | 26.6%
-# (9) Incomplete Demographic/Clinical    | 201          | 1.7%
+# (9) Go Missing > 10%                    | 1443         | 12.5%
+# (10) Go Errors > 10%                   | 307          | 2.7%
+# (11) Incomplete Demographic/Clinical   | 136          | 1.2%
 # ---------------------------------------------------------------------------
-# FINAL VALID DATASET                    | 5144         | 44.7%
+# FINAL VALID DATASET                    | 3567         | 31.0%
 # ===========================================================================
+
+

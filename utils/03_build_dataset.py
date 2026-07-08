@@ -33,7 +33,8 @@ pd.set_option('future.no_silent_downcasting', True)
 # ==============================================================================
 
 # --- Base Directories ---
-BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
+# BASE_DIR = Path('/kyb/agpd/wwang/data_abcd/')
+BASE_DIR = Path("/Users/w/Desktop/data/")  # <-- UPDATE THIS PATH
 
 # --- Input Data Directories & Files ---
 FILE_LIST_PATH = BASE_DIR / 'sst_valid_filenames.txt'
@@ -128,7 +129,7 @@ def get_behavioral_stats(file_list_path: Path, data_dir: Path) -> pd.DataFrame:
             
             # Unpack the 16 computed values
             (perc_gs, perc_ge, perc_gm, perc_ss,
-             mrt_gs, mrt_ge, mrt_se, mssd, ssrt,
+             mrt_gs, std_go_rt, mrt_ge, mrt_se, mssd, ssrt,
              rate_perc_ss_ssd, rate_rt_se_ssd,
              pes, pss, pges, acf1, acf2, slope) = stats
 
@@ -138,7 +139,7 @@ def get_behavioral_stats(file_list_path: Path, data_dir: Path) -> pd.DataFrame:
                 'filename': fname,
                 # Basic Metrics
                 'perc_gs': perc_gs, 'perc_ge': perc_ge, 'perc_gm': perc_gm, 'perc_ss': perc_ss,
-                'mrt_gs': mrt_gs, 'mrt_ge': mrt_ge, 'mrt_se': mrt_se, 'mssd': mssd, 'ssrt': ssrt,
+                'mrt_gs': mrt_gs, 'std_go_rt': std_go_rt, 'mrt_ge': mrt_ge, 'mrt_se': mrt_se, 'mssd': mssd, 'ssrt': ssrt,
                 # SSD Slopes
                 'rate_perc_ss_ssd': rate_perc_ss_ssd, 'rate_rt_se_ssd': rate_rt_se_ssd,
                 # Sequential / Temporal Effects
@@ -218,6 +219,15 @@ def get_iq_data(path: Path) -> pd.DataFrame:
 def main():
     print("Computing behavioral stats from raw files...")
     df_stats = get_behavioral_stats(FILE_LIST_PATH, DATA_DIR)
+
+    UNFILTERED_STATS_CSV = BASE_DIR / 'unfiltered_behavioral_stats.csv'
+    df_stats.to_csv(UNFILTERED_STATS_CSV, index=False)
+    print(f"Unfiltered behavioral stats saved to: {UNFILTERED_STATS_CSV}")
+
+    THRESHOLD = 0.1
+    initial_stats_len = len(df_stats)
+    df_stats = df_stats[(df_stats['perc_gm'] <= THRESHOLD) & (df_stats['perc_ge'] <= THRESHOLD)]
+    print(f"Dropped {initial_stats_len - len(df_stats)} rows due to perc_gm or perc_ge > {THRESHOLD}%.")
 
     print("Loading Demographics, CBCL, Meds, and IQ...")
     df_cbcl = get_cbcl_data(CBCL_FILE)

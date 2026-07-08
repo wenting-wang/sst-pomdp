@@ -203,6 +203,8 @@ def get_stats_mean(df):
     # Standard metrics
     percs = get_percentage(df)
     mrt_gs = df[df.result == "GS"].rt_real.mean()
+    std_go_rt = df[df.result == "GS"].rt_real.std()
+    
     mrt_ge = df[df.result == "GE"].rt_real.mean()
     mrt_se = df[df.result == "SE"].rt_real.mean()
     mssd = df.ssd_real.mean() 
@@ -215,7 +217,7 @@ def get_stats_mean(df):
     # --- NEW: Sequential Metrics ---
     pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df, rt_col='rt_real')
     
-    return (*percs, mrt_gs, mrt_ge, mrt_se, mssd, ssrt, rate_perc_ss, rate_rt_se, 
+    return (*percs, mrt_gs, std_go_rt, mrt_ge, mrt_se, mssd, ssrt, rate_perc_ss, rate_rt_se, 
             pes, pss, pges, acf1, acf2, slope)
 
 
@@ -225,6 +227,7 @@ def get_stats_mean_sim(df):
     """
     percs = get_percentage(df)
     mrt_gs = df[df.result == "GS"].rt.mean() * 25
+    std_go_rt = df[df.result == "GS"].rt.std() * 25
     mrt_ge = df[df.result == "GE"].rt.mean() * 25
     mrt_se = df[df.result == "SE"].rt.mean() * 25
     mssd = df.ssd.mean() * 25
@@ -234,10 +237,11 @@ def get_stats_mean_sim(df):
     
     # Calculate sequential stats (scaled RTs)
     # Note: Simulated data usually needs 'rt' scaled to ms for comparison
-    df['rt_ms'] = df['rt'] * 25
-    pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df, rt_col='rt_ms')
+    df_seq = df.copy()
+    df_seq['rt_ms'] = df_seq['rt'] * 25
+    pes, pss, pges, acf1, acf2, slope = get_sequential_stats(df_seq, rt_col='rt_ms')
     
-    return (*percs, mrt_gs, mrt_ge, mrt_se, mssd, ssrt, rate_perc_ss, rate_rt_se, 
+    return (*percs, mrt_gs, std_go_rt, mrt_ge, mrt_se, mssd, ssrt, rate_perc_ss, rate_rt_se, 
             pes, pss, pges, acf1, acf2, slope)
 
 
