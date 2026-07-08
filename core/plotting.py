@@ -474,7 +474,7 @@ def plot_stop_prior_sensitivity(
     params: dict,
     rates=(0.05, 0.10, 1/6, 0.20, 0.25, 0.30),
     ssds=np.arange(2, 35, 4), 
-    n_session=400,  
+    n_session=40,  
     saveto=None,
     min_rt_trials=3 
 ):
@@ -608,10 +608,12 @@ def plot_stop_prior_sensitivity(
     ax_go_rt.scatter(rates, go_rt_list, s=30, color=color_primary, marker='s', zorder=2)
     
     ax_go_rt.set_ylabel("Reaction Time", color=color_primary, fontsize=style['label_fontsize'])
-    # ax_go_rt.set_ylim(-2, 40)
-    # ax_go_rt.set_yticks([0, 10, 20, 30, 40])
-    ax_go_rt.set_ylim(-2, 30)
-    ax_go_rt.set_yticks([0, 5, 10, 15, 20, 25, 30])
+    
+    ax_go_rt.set_ylim(-2, 40)
+    ax_go_rt.set_yticks([0, 10, 20, 30, 40])
+    
+    # ax_go_rt.set_ylim(-2, 30)
+    # ax_go_rt.set_yticks([0, 5, 10, 15, 20, 25, 30])
     
     ax_go_rt.tick_params(axis='y', colors=color_primary, labelsize=style['tick_fontsize'])
     ax_go_rt.spines['right'].set_color(color_primary)
@@ -643,10 +645,12 @@ def plot_stop_prior_sensitivity(
     ax_s_acc.spines['right'].set_visible(False)
 
     ax_s_rt.set_ylabel("Reaction Time", fontsize=style['label_fontsize'])
-    # ax_s_rt.set_ylim(-2, 40)
-    # ax_s_rt.set_yticks([0, 10, 20, 30, 40])
-    ax_s_rt.set_ylim(-2, 30)
-    ax_s_rt.set_yticks([0, 5, 10, 15, 20, 25, 30])
+    
+    ax_s_rt.set_ylim(-2, 40)
+    ax_s_rt.set_yticks([0, 10, 20, 30, 40])
+    
+    # ax_s_rt.set_ylim(-2, 30)
+    # ax_s_rt.set_yticks([0, 5, 10, 15, 20, 25, 30])
     
     ax_s_rt.set_title("Stop Trials", fontsize=style['label_fontsize'] + 1, pad=10)
     ax_s_rt.spines['top'].set_visible(False)

@@ -32,18 +32,17 @@ repo_root = current_dir.parent
 
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    OUT_DIR = repo_root / 'outputs'
-    EMBED_CSV = repo_root / 'data' / 'example_embeddings.csv'
+    OUT_DIR = repo_root / 'outputs_example'
+    EMBED_CSV = repo_root / 'outputs_example' / 'tesbi' / 'example_embeddings_6p_v1.csv'
     STATS_CSV = repo_root / 'data' / 'example_clinical_behavior.csv'
     
-    # Placeholders to prevent NameError in demo mode
     RAW_DATA_DIR = repo_root / 'data' / 'example_processed_data'
     USE_PREPROCESSING = False
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = repo_root / 'outputs'
-    EMBED_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/embeddings_e2e_tesbi_e2e_6p_v1.csv")
-    STATS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
+    EMBED_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    STATS_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
     
     # Processing settings for local data
     RAW_DATA_DIR = Path("/Users/w/Desktop/data/sst_valid_base")
@@ -240,35 +239,3 @@ axC.text(-0.17, 1.05, 'C', transform=axC.transAxes, size=14, weight='bold')
 # Final Output & Save
 print(f"Saving figure to: {OUTPUT_PLOT}")
 plt.savefig(OUTPUT_PLOT, dpi=300, bbox_inches='tight', format='png')
-
-# Loading data...
-# Data merged. Total subjects: 3565
-# Running CCA on actual data...
-# Running Permutation Test (1000 iterations) using parallel processing...
-# [Parallel(n_jobs=-1)]: Using backend LokyBackend with 8 concurrent workers.
-# [Parallel(n_jobs=-1)]: Done   2 tasks      | elapsed:    5.3s
-# [Parallel(n_jobs=-1)]: Done  56 tasks      | elapsed:   20.3s
-# [Parallel(n_jobs=-1)]: Done 146 tasks      | elapsed:   49.5s
-# [Parallel(n_jobs=-1)]: Done 272 tasks      | elapsed:  1.5min
-# [Parallel(n_jobs=-1)]: Done 434 tasks      | elapsed:  2.5min
-# [Parallel(n_jobs=-1)]: Done 632 tasks      | elapsed:  3.9min
-# [Parallel(n_jobs=-1)]: Done 866 tasks      | elapsed:  5.8min
-# [Parallel(n_jobs=-1)]: Done 1000 out of 1000 | elapsed:  6.8min finished
-
-# --- CCA RESULTS (All Components) ---
-# Variate  1: r = 0.9953, p = 0.0000 ***
-# Variate  2: r = 0.9826, p = 0.0000 ***
-# Variate  3: r = 0.9283, p = 0.0000 ***
-# Variate  4: r = 0.8675, p = 0.0000 ***
-# Variate  5: r = 0.6930, p = 0.0000 ***
-# Variate  6: r = 0.6254, p = 0.0000 ***
-# Variate  7: r = 0.5266, p = 0.0000 ***
-# Variate  8: r = 0.4154, p = 0.0000 ***
-# Variate  9: r = 0.3351, p = 0.0000 ***
-# Variate 10: r = 0.2871, p = 0.0000 ***
-# Variate 11: r = 0.2628, p = 0.0000 ***
-# Variate 12: r = 0.2088, p = 0.0000 ***
-# Variate 13: r = 0.1916, p = 0.0000 ***
-# Variate 14: r = 0.1789, p = 0.0000 ***
-# Variate 15: r = 0.1692, p = 0.0000 ***
-# ------------------------------------

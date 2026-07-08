@@ -34,8 +34,8 @@ DEMO_MODE = not args.prod
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
     DATA_DIR = PROJECT_ROOT / "data"
-    OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
+    OUT_DIR = PROJECT_ROOT / "outputs_example"
+    PARAMS_CSV = OUT_DIR / "tesbi" /"example_posteriors_6p_v1.csv"
     SUBJECT_ID = 'EXAMPLE_SUB_001'
     
     # Placeholders to prevent NameError
@@ -45,7 +45,7 @@ else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     DATA_DIR = PROJECT_ROOT / "data"
     OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    PARAMS_CSV = Path("/Users/w/sst-pomdp/data/params_posteriors_6p_v1.csv")
     SUBJECT_ID = 'NDAR_INVRUVFBX1L'
     
     # Processing settings for local data
@@ -143,15 +143,16 @@ def main():
         true_go_state='right',
         true_stop_state='nonstop',
         ssd=None,
-        batch_size=6000,
+        # batch_size=6000,
+        batch_size=600,
         verbose=True
     )
     
-    gm_trials = [trial for trial in out_go if trial['result'] == 'GM']
-    if len(gm_trials) >= 4:
-        print(f"Successfully found {len(gm_trials)} GM trials in the batch.")
-    else:
-        print(f"Warning: Only found {len(gm_trials)} GM trials. The model's GM probability is too low.")
+    # gm_trials = [trial for trial in out_go if trial['result'] == 'GM']
+    # if len(gm_trials) >= 4:
+    #     print(f"Successfully found {len(gm_trials)} GM trials in the batch.")
+    # else:
+    #     print(f"Warning: Only found {len(gm_trials)} GM trials. The model's GM probability is too low.")
 
     # Stop Trials
     out_stop = simulation.simu_trial_batch(
@@ -159,7 +160,8 @@ def main():
         true_go_state='right',
         true_stop_state='stop',
         ssd=7,
-        batch_size=1200,
+        # batch_size=1200,
+        batch_size=120,
         verbose=True
     )
 
@@ -179,23 +181,11 @@ def main():
         params=params,
         rates=(0.05, 0.10, 1/6, 0.20, 0.25, 0.30),
         ssds=np.arange(2, 35, 4),
-        n_session=600,
+        # n_session=600,
+        n_session=60,
         saveto=OUT_DIR / "fig_stop_prior_sensitivity.png", 
     )
     
-    
-    
-    ############### PLOS CB TIFF ###############
-    
-    # plotting.plot_belief(
-    #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'belief.tiff'
-    # )
-    
-    # plotting.plot_action_value(
-    #     out_go, out_stop, show_cnt=5, saveto=OUT_DIR / 'action_value.tiff'
-    # )
-    
-
     print("Done.")
 
 
