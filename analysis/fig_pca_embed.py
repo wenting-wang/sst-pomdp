@@ -33,16 +33,16 @@ PROJECT_ROOT = CURRENT_DIR.parent
 
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    OUT_DIR = PROJECT_ROOT / "outputs"
-    FILE_EMBEDDINGS = PROJECT_ROOT / "data" / "example_embeddings.csv"
+    OUT_DIR = PROJECT_ROOT / "outputs_example"
     FILE_STATS = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
-    FILE_POSTERIOR = PROJECT_ROOT / "data" / "example_params_posteriors.csv"
+    FILE_EMBEDDINGS = PROJECT_ROOT / "outputs_example" / "tesbi" / "model_posteriors" / "example_embeddings_6p_v1.csv"
+    FILE_POSTERIOR = PROJECT_ROOT / "outputs_example" / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = PROJECT_ROOT / "outputs"
-    FILE_EMBEDDINGS = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/embeddings_e2e_tesbi_e2e_6p_v1.csv")
-    FILE_STATS = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
-    FILE_POSTERIOR = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    FILE_EMBEDDINGS = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    FILE_POSTERIOR = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
+    FILE_STATS = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

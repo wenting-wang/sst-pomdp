@@ -64,12 +64,12 @@ STYLE = {
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
     DATA_DIR = PROJECT_ROOT / "data"
-    OUT_DIR = PROJECT_ROOT / "outputs"
+    OUT_DIR = PROJECT_ROOT / "outputs_example"
     RAW_DATA_DIR = DATA_DIR / "example_processed_data"
     
     FILTER_CSV = DATA_DIR / "example_clinical_behavior.csv"
-    PARAMS_CSV = DATA_DIR / "example_params_posteriors.csv"
-    PPC_METRICS_CSV = DATA_DIR / "example_ppc_metrics.csv" 
+    PARAMS_CSV = OUT_DIR / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
+    PPC_METRICS_CSV = OUT_DIR / "tesbi" / "model_posteriors" / "example_ppc_metrics_6p_v1.csv" 
     USE_PREPROCESSING = False  # Example data is already cleaned
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
@@ -77,9 +77,9 @@ else:
     OUT_DIR = PROJECT_ROOT / "outputs"
     RAW_DATA_DIR = Path("/Users/w/Desktop/data/sst_valid_base")
     
-    FILTER_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
-    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
-    PPC_METRICS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/ppc_metrics_6p_v1.csv") 
+    FILTER_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
+    PARAMS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
+    PPC_METRICS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/ppc_metrics_6p_v1.csv") 
     USE_PREPROCESSING = True   # Raw desktop data needs preprocessing
 
 # Ensure output directory exists

@@ -28,12 +28,12 @@ PROJECT_ROOT = CURRENT_DIR.parent
 
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    OUT_DIR = PROJECT_ROOT / "outputs"
+    OUT_DIR = PROJECT_ROOT / "outputs_example"
     STATS_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = PROJECT_ROOT / "outputs"
-    STATS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
+    STATS_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
 
 # Ensure output directory exists
 OUT_DIR.mkdir(parents=True, exist_ok=True)

@@ -35,7 +35,7 @@ if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
     DATA_DIR = PROJECT_ROOT / "data"
     OUT_DIR = PROJECT_ROOT / "outputs_example"
-    PARAMS_CSV = OUT_DIR / "tesbi" /"example_posteriors_6p_v1.csv"
+    PARAMS_CSV = OUT_DIR / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
     SUBJECT_ID = 'EXAMPLE_SUB_001'
     
     # Placeholders to prevent NameError
@@ -45,7 +45,7 @@ else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     DATA_DIR = PROJECT_ROOT / "data"
     OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = Path("/Users/w/sst-pomdp/data/params_posteriors_6p_v1.csv")
+    PARAMS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
     SUBJECT_ID = 'NDAR_INVRUVFBX1L'
     
     # Processing settings for local data
@@ -182,7 +182,7 @@ def main():
         rates=(0.05, 0.10, 1/6, 0.20, 0.25, 0.30),
         ssds=np.arange(2, 35, 4),
         # n_session=600,
-        n_session=60,
+        n_session=20,
         saveto=OUT_DIR / "fig_stop_prior_sensitivity.png", 
     )
     

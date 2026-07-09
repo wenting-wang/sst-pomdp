@@ -1,0 +1,33 @@
+\begin{table}[H]
+    \centering
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \captionsetup{labelfont=bf}
+    \caption{\textbf{POMDP model specification and parameter priors}}
+    \label{tab:model_variants}
+    \makebox[\textwidth][c]{%
+    \begin{tabular}{l c c c c c c c c c c c }
+        \toprule
+        \textbf{Model} & $\chi'$ & $\godirr$ & $\stnull$ & $\stdirr$ & $c_{\text{ge}}$ & $c_{\text{gm}}$ & $c_{\text{se}}$ & $c_t$ & $\varphi$ & $\tau$ & $\tilde{r}^{\nu}$ \\
+        \midrule
+        \textbf{Prior Range} & $[0, 1]$ & $[0.5, 1]$ & $[0, 1]$ & $[0.5, 1]$ & $[1, 50]$ & $[1, 50]$ & $[1, 50]$ & $[0.01, 0.5]$ & $[10, 100]$ & $[4, 16]$ & Fixed \\
+        \midrule
+        \textbf{M10.1} & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & $1/6$ \\
+        \textbf{M8.1} & \checkmark & \checkmark & 0.1348 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M8.2} & \checkmark & \checkmark & 0.0787 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M8.3} & \checkmark & \checkmark & 0.2441 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M8.4} & \checkmark & \checkmark & 0.1348 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 37.9558 & \checkmark & $1/6$ \\
+        \textbf{M8.5} & \checkmark & \checkmark & 0.1348 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 51.8192 & \checkmark & $1/6$ \\
+        \textbf{M7.1} & \checkmark & \checkmark & 0.0787 & \checkmark & \checkmark & 9.5955 & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M7.2} & \checkmark & \checkmark & 0.0787 & \checkmark & \checkmark & 13.1139 & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M7.3} & \checkmark & \checkmark & 0.0787 & \checkmark & \checkmark & 15.7821 & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M7.4} & 0.1026 & \checkmark & 0.0787 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M7.5} & 0.2361 & \checkmark & 0.0787 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M7.6} & 0.5328 & \checkmark & 0.0787 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M6.1} & 0.0798 & \checkmark & 0.0787 & \checkmark & \checkmark & 15.7821 & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M6.2} & 0.1671 & \checkmark & 0.0787 & \checkmark & \checkmark & 15.7821 & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \textbf{M6.3} & 0.4295 & \checkmark & 0.0787 & \checkmark & \checkmark & 15.7821 & \checkmark & \checkmark & 44.6534 & \checkmark & $1/6$ \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}

@@ -14,6 +14,7 @@ can import the model architecture correctly.
 
 import os
 import argparse
+import sys
 import warnings
 from pathlib import Path
 
@@ -22,35 +23,38 @@ import torch.nn as nn
 import pandas as pd
 import numpy as np
 
-# --- Import existing model and preprocessing ---
-# Assuming your main script is named tesbi_e2e_6p_v1.py
-from tesbi_e2e_6p_v1 import EndToEndTeSBI, PARAM_ORDER 
-from utils.preprocessing import preprocessing
-
 # ==============================================================================
 # CONFIGURATION & PATHS
 # ==============================================================================
 RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
 
 # --- OPTION A: HPC Production Configuration (Recommended) ---
-BASE_DIR = Path('/u/wenwang/data/')
-OUT_DIR = Path('/u/wenwang/outputs/')
-DEFAULT_DATA_DIR = BASE_DIR / "sst_valid_base"
-DEFAULT_META_CSV = BASE_DIR / "clinical_behavior.csv"
-# DEFAULT_MODEL_PATH = OUT_DIR / "amortized_inference_net_6p_v1.pth"
-DEFAULT_MODEL_PATH="/u/wenwang/my_ptmp/10331248/outputs/amortized_inference_net_6p_v1.pth"
-DEFAULT_OUT_CSV = OUT_DIR / "embeddings_e2e.csv"
-USE_PREPROCESSING = True  
+# from tesbi_e2e_6p_v1 import EndToEndTeSBI, PARAM_ORDER 
+# from utils.preprocessing import preprocessing
+
+# BASE_DIR = Path('/u/wenwang/data/')
+# OUT_DIR = Path('/u/wenwang/outputs/')
+# DEFAULT_DATA_DIR = BASE_DIR / "sst_valid_base"
+# DEFAULT_META_CSV = BASE_DIR / "clinical_behavior.csv"
+# # DEFAULT_MODEL_PATH = OUT_DIR / "amortized_inference_net_6p_v1.pth"
+# DEFAULT_MODEL_PATH="/u/wenwang/my_ptmp/10331248/outputs/amortized_inference_net_6p_v1.pth"
+# DEFAULT_OUT_CSV = OUT_DIR / "embeddings_e2e_6p_v1.csv"
+# USE_PREPROCESSING = True  
+
 
 # --- OPTION B: Local Testing Configuration ---
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
+sys.path.append(str(PROJECT_ROOT))
 
-# DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "example_processed_data"
-# DEFAULT_META_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
-# DEFAULT_MODEL_PATH = PROJECT_ROOT / "outputs" / "amortized_inference_net_6p_v1.pth"
-# DEFAULT_OUT_CSV = PROJECT_ROOT / "outputs" / "example_embeddings_e2e.csv"
-# USE_PREPROCESSING = False 
+from outputs_example.tesbi.model_spec.tesbi_e2e_6p_v1 import EndToEndTeSBI, PARAM_ORDER 
+from utils.preprocessing import preprocessing
+
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "example_processed_data"
+DEFAULT_META_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "outputs_example" / "tesbi" / "amortized_inference_net_6p_v1.pth"
+DEFAULT_OUT_CSV = PROJECT_ROOT / "outputs_example" / "tesbi" / "example_embeddings_6p_v1.csv"
+USE_PREPROCESSING = False 
 
 
 # ==============================================================================

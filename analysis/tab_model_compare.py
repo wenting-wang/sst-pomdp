@@ -31,9 +31,9 @@ if DEMO_MODE:
     INPUT_BASE = PROJECT_ROOT / "outputs_example" / "tesbi"
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
-    INPUT_BASE = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/outputs/tesbi")
+    INPUT_BASE = Path("/Users/w/sst-hdbm/sst-pomdp/outputs/tesbi")
 
-OUT_DIR = PROJECT_ROOT / "outputs"
+OUT_DIR = PROJECT_ROOT / "outputs_example" / "tesbi"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ==========================================
@@ -95,7 +95,7 @@ def extract_recoveries():
     print(f"Extracting Recovery Stats from {len(csv_files)} files...")
     summary_data = []
     for file_path in csv_files:
-        model_name = os.path.basename(file_path).replace('params_recovery_', '').replace('.csv', '')
+        model_name = os.path.basename(file_path).replace('params_recovery_', '').replace('recovery_', '').replace('.csv', '')
         try:
             df = pd.read_csv(file_path)
             params = [col[3:] for col in df.columns if col.startswith('gt_')]
@@ -151,7 +151,7 @@ def summarize_ppc_metrics():
 
     summary_data = []
     for file_path in csv_files:
-        model_name = os.path.basename(file_path).replace('ppc_model_summary_', '').replace('ppc_metrics_', '').replace('.csv', '')
+        model_name = os.path.basename(file_path).replace('ppc_model_summary_', '').replace('ppc_metrics_', '').replace('ppc_', '').replace('.csv', '')
         try:
             df = pd.read_csv(file_path)
             model_summary = {'model_name': model_name}
@@ -168,13 +168,13 @@ def summarize_cv_ppc_metrics():
     if not os.path.exists(CONFIG['input_cv_folder']): return
     target_columns = ['dis_perc_gs', 'dis_perc_ge', 'dis_perc_gm', 'dis_perc_ss', 'dis_ws_rt_gs', 'dis_ws_rt_ge', 'dis_ws_rt_se', 'dis_ks_rt_gs', 'dis_ks_rt_se', 'dis_ssd_mean', 'total_distance']
     
-    search_pattern = os.path.join(CONFIG['input_cv_folder'], 'cv_summary_*.csv')
+    search_pattern = os.path.join(CONFIG['input_cv_folder'], '*.csv')
     csv_files = glob.glob(search_pattern)
     if not csv_files: return
 
     summary_data = []
     for file_path in csv_files:
-        model_name = os.path.basename(file_path).replace('cv_summary_', '').replace('.csv', '')
+        model_name = os.path.basename(file_path).replace('cv_summary_', '').replace('cv_', '').replace('.csv', '')
         try:
             df = pd.read_csv(file_path)
             model_summary = {'model_name': model_name}

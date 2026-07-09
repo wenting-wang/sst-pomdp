@@ -30,14 +30,14 @@ PROJECT_ROOT = CURRENT_DIR.parent
 
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = PROJECT_ROOT / "data" / "example_params_posteriors.csv"
+    OUT_DIR = PROJECT_ROOT / "outputs_example"
+    PARAMS_CSV = OUT_DIR / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
     STATS_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
-    STATS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
+    PARAMS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
+    STATS_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

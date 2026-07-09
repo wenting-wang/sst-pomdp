@@ -33,14 +33,14 @@ repo_root = current_dir.parent
 
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    OUT_DIR = repo_root / 'outputs'
+    OUT_DIR = repo_root / 'outputs_example'
     CLIN_CSV = repo_root / 'data' / 'example_clinical_behavior.csv'
-    PARAMS_CSV = repo_root / 'data' / 'example_params_posteriors.csv'
+    PARAMS_CSV = repo_root / 'outputs_example' / 'tesbi' / 'model_posteriors' / 'example_posteriors_6p_v1.csv'
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = repo_root / 'outputs'
-    CLIN_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv")
-    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
+    CLIN_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
+    PARAMS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True) 
 
@@ -48,26 +48,35 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 # 2. DATA LOADING & MERGING
 # =============================================================================
 df_clin = pd.read_csv(CLIN_CSV)
-df_clin['subject_id_full'] = 'NDAR_' + df_clin['subject_id'].astype(str)
-
 df_params = pd.read_csv(PARAMS_CSV)
 
 df_params_wide = df_params.pivot(index='subject_id', columns='index', values='50%').reset_index()
 
-df_merged = pd.merge(df_clin, df_params_wide, left_on='subject_id_full', right_on='subject_id')
+if DEMO_MODE:
+    merge_key_clin = 'subject_id'
+else:
+    df_clin['subject_id_full'] = 'NDAR_' + df_clin['subject_id'].astype(str)
+    merge_key_clin = 'subject_id_full'
+
+df_merged = pd.merge(df_clin, df_params_wide, left_on=merge_key_clin, right_on='subject_id')
+
+if 'subject_id_full' in df_merged.columns:
+    df_merged = df_merged.drop(columns=['subject_id_y']).rename(columns={'subject_id_x': 'subject_id_short'})
+
+df_merged['sex'] = df_merged['sex'].replace({'F': 'Female', 'M': 'Male'})
 
 # =============================================================================
 # # 3. Clinical Bins (Refined for Extreme Tails)
 # =============================================================================
 bins = [-1, 0, 3, 7, 15]
-raw_labels = ['0', '1-3', '4-7', '$\geq$8']
+raw_labels = ['0', '1-3', '4-7', r'$\geq$8']
 df_merged['adhd_bin_raw'] = pd.cut(df_merged['adhd'], bins=bins, labels=raw_labels)
 
 total_n = len(df_merged['adhd_bin_raw'].dropna())
 label_mapping = {}
 for l in raw_labels:
     count = sum(df_merged['adhd_bin_raw'] == l)
-    pct = (count / total_n) * 100
+    pct = (count / total_n) * 100 if total_n > 0 else 0
     label_mapping[l] = f"{l}\n({pct:.1f}%)"
 
 labels = [label_mapping[l] for l in raw_labels]

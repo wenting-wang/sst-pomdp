@@ -33,7 +33,7 @@ repo_root = current_dir.parent
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
     OUT_DIR = repo_root / 'outputs_example'
-    EMBED_CSV = repo_root / 'outputs_example' / 'tesbi' / 'example_embeddings_6p_v1.csv'
+    EMBED_CSV = repo_root / 'outputs_example' / 'tesbi' / 'model_posteriors' / 'example_embeddings_6p_v1.csv'
     STATS_CSV = repo_root / 'data' / 'example_clinical_behavior.csv'
     
     RAW_DATA_DIR = repo_root / 'data' / 'example_processed_data'
@@ -41,7 +41,7 @@ if DEMO_MODE:
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = repo_root / 'outputs'
-    EMBED_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    EMBED_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/embeddings_e2e_tesbi_e2e_6p_v1.csv")
     STATS_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
     
     # Processing settings for local data

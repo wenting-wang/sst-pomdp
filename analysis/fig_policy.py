@@ -22,8 +22,6 @@ DEMO_MODE = not args.prod
 # =============================================================================
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
-
-# Add project root to sys.path to import from 'core'
 sys.path.append(str(PROJECT_ROOT))
 
 from core.models import POMDP
@@ -35,40 +33,20 @@ from core import plotting
 # =============================================================================
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = PROJECT_ROOT / "data" / "example_params_posteriors.csv"
+    OUT_DIR = PROJECT_ROOT / "outputs_example"
+    PARAMS_CSV = PROJECT_ROOT / "outputs_example" / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
     SUBJECT_ID = 'EXAMPLE_SUB_001'
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = PROJECT_ROOT / "outputs"
-    PARAMS_CSV = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/data/params_posteriors_6p_v1.csv")
-    SUBJECT_ID = 'NDAR_INVRUVFBX1L'
+    PARAMS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
+    SUBJECT_ID = 'XXXXXXXXXXX'
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
 # 3. MODEL PARAMETERS
 # =============================================================================
-FIXED_PARAMS = {
-    "inv_temp": 44.6534,
-    "q_s_n": 0.0787,
-    "rate_stop_trial": 1.0 / 6.0,
-    "q_d_n": 0.0798,
-    "cost_go_missing": 15.7821,
-}
-
-# Params to extract from CSV
-DYNAMIC_PARAMS = [
-    "q_d",
-    "q_s",
-    "tau",
-    "cost_stop_error",
-    "cost_go_error",
-    "cost_time"
-]
-
-# --- Helper Functions ---
-
 def get_subject_params(target_id, path):
     """
     Loads posterior parameters for a specific subject and merges them with fixed parameters.
@@ -98,8 +76,8 @@ def get_subject_params(target_id, path):
         raise KeyError("Could not find 'index' or 'param' column in posterior data.")
 
     # Extract dynamic params and merge with fixed
-    dynamic = {k: p_dict[k] for k in DYNAMIC_PARAMS if k in p_dict}
-    merged_params = {**dynamic, **FIXED_PARAMS}
+    params = {k: p_dict[k] for k in p_dict}
+    merged_params = {**params}
     
     return merged_params, target_id
 
@@ -133,7 +111,7 @@ def main():
         
         out_stop = simulation.simu_trial_batch(
             model=pomdp, true_go_state='right', true_stop_state='stop',
-            ssd=7, batch_size=600, verbose=True
+            ssd=10, batch_size=600, verbose=True
         )
 
         # 2. Define mapping for outcome names, data sources, and result codes

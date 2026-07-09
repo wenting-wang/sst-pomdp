@@ -24,10 +24,14 @@ PROJECT_ROOT = CURRENT_DIR.parent
 
 if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
-    INPUT_DIR = PROJECT_ROOT / "outputs_example" / "tesbi"
+    INPUT_DIR = PROJECT_ROOT / "outputs_example" / "tesbi" / "model_posteriors"
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
-    INPUT_DIR = Path("/Users/w/sst-hdbm-mac/sst-pomdp-main/outputs/tesbi")
+    INPUT_DIR = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors")
+
+# =============================================================================
+# Selected models to analyze
+MODELS = ['10p_v1', '8p_v2', '7p_v3', '6p_v1']
 
 # =============================================================================
 # 2. BATCH PROCESSING LOOP
@@ -38,7 +42,10 @@ def main():
         return
 
     # Find all parameter posterior CSVs in the target directory
-    csv_files = list(INPUT_DIR.glob("params_posteriors_*.csv"))
+    csv_files = list(INPUT_DIR.glob("*posteriors_*.csv"))
+    
+    
+    csv_files = [f for f in csv_files if any(model in f.name for model in MODELS)]
     
     if not csv_files:
         print(f"No 'params_posteriors_*.csv' files found in {INPUT_DIR}")
