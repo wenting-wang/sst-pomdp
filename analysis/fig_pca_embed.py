@@ -35,12 +35,12 @@ if DEMO_MODE:
     print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
     OUT_DIR = PROJECT_ROOT / "outputs_example"
     FILE_STATS = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
-    FILE_EMBEDDINGS = PROJECT_ROOT / "outputs_example" / "tesbi" / "model_posteriors" / "example_embeddings_6p_v1.csv"
+    FILE_EMBEDDINGS = PROJECT_ROOT / "outputs_example" / "tesbi" / "example_embeddings_6p_v1.csv"
     FILE_POSTERIOR = PROJECT_ROOT / "outputs_example" / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
     OUT_DIR = PROJECT_ROOT / "outputs"
-    FILE_EMBEDDINGS = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    FILE_EMBEDDINGS = Path("/Users/w/sst-pomdp/outputs/tesbi/embeddings_e2e_tesbi_e2e_6p_v1.csv")
     FILE_POSTERIOR = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
     FILE_STATS = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
 
