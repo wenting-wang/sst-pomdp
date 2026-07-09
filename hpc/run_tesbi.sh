@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=TeSBI_E2E
+#SBATCH --job-name=TeSBI
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --exclusive                  

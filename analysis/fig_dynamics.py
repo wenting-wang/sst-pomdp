@@ -175,7 +175,6 @@ def main():
         out_go, out_stop, show_cnt=4, saveto=OUT_DIR / 'fig_action_values.png'
     )
 
-    
     plotting.plot_stop_prior_sensitivity(
         model=pomdp,
         params=params,

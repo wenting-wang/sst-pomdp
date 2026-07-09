@@ -69,7 +69,7 @@ if DEMO_MODE:
     
     FILTER_CSV = DATA_DIR / "example_clinical_behavior.csv"
     PARAMS_CSV = OUT_DIR / "tesbi" / "model_posteriors" / "example_posteriors_6p_v1.csv"
-    PPC_METRICS_CSV = OUT_DIR / "tesbi" / "model_posteriors" / "example_ppc_metrics_6p_v1.csv" 
+    PPC_METRICS_CSV = OUT_DIR / "tesbi" / "example_ppc_metrics_6p_v1.csv" 
     USE_PREPROCESSING = False  # Example data is already cleaned
 else:
     print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
@@ -79,7 +79,7 @@ else:
     
     FILTER_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
     PARAMS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/params_posteriors_6p_v1.csv")
-    PPC_METRICS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/ppc_metrics_6p_v1.csv") 
+    PPC_METRICS_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/ppc_metrics_6p_v1.csv") 
     USE_PREPROCESSING = True   # Raw desktop data needs preprocessing
 
 # Ensure output directory exists

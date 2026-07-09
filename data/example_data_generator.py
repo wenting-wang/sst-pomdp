@@ -21,9 +21,11 @@ REAL_OUT_DIR = Path("/Users/w/sst-pomdp/outputs/tesbi")
 # --- Mock Data Output Paths ---
 MOCK_DATA_DIR = PROJECT_ROOT / "data"
 MOCK_OUT_DIR = PROJECT_ROOT / "outputs_example" / "tesbi"
+POSTERIORS_DIR = MOCK_OUT_DIR / "model_posteriors"
 PROCESSED_DATA_DIR = MOCK_DATA_DIR / "example_processed_data"
 
 MOCK_OUT_DIR.mkdir(parents=True, exist_ok=True)
+POSTERIORS_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # MODELS = ['10p_v1', '8p_v2', '7p_v3', '6p_v1']
@@ -33,7 +35,7 @@ MODELS = ['10p_v1',
           '6p_v1', '6p_v2', '6p_v3']
 BEST_MODEL = '6p_v1'
 
-N_SUBJECTS = 10
+N_SUBJECTS = 100
 
 # =============================================================================
 # 2. Helper Functions
@@ -122,7 +124,7 @@ def main():
         df_ppc.columns = ['subject_id'] + [f"ppc_{c}" for c in ppc_cols]
 
     # 3. Load and prep Parameter Posteriors
-    real_post_path = REAL_OUT_DIR / f'params_posteriors_{BEST_MODEL}.csv'
+    real_post_path = REAL_OUT_DIR / 'model_posteriors' / f'params_posteriors_{BEST_MODEL}.csv'
     df_post = pd.read_csv(real_post_path) if real_post_path.exists() else pd.DataFrame()
     post_cols = []
     if not df_post.empty:
@@ -195,7 +197,7 @@ def main():
             fake_post_long['subject_year'] = 'baseline'
             fake_post_long = fake_post_long[['index', 'mean', 'std', '5%', '50%', '95%', 'subject_id', 'subject_year']]
             
-            out_post = MOCK_OUT_DIR / f'example_posteriors_{BEST_MODEL}.csv'
+            out_post = POSTERIORS_DIR / f'example_posteriors_{BEST_MODEL}.csv'
             fake_post_long.to_csv(out_post, index=False)
             print(f"-> Generated {out_post.name}")
             
@@ -224,7 +226,7 @@ def main():
 
         # 1. Parameter Posteriors (Skip if BEST_MODEL, already handled jointly)
         if model != BEST_MODEL:
-            real_post_path = REAL_OUT_DIR / f'params_posteriors_{model}.csv'
+            real_post_path = REAL_OUT_DIR / 'model_posteriors' / f'params_posteriors_{model}.csv'
             if real_post_path.exists():
                 df_post_loop = pd.read_csv(real_post_path)
                 
@@ -241,7 +243,7 @@ def main():
                 
                 fake_long = fake_long[['index', 'mean', 'std', '5%', '50%', '95%', 'subject_id', 'subject_year']]
                 
-                out_post_loop = MOCK_OUT_DIR / f'example_posteriors_{model}.csv'
+                out_post_loop = POSTERIORS_DIR / f'example_posteriors_{model}.csv'
                 fake_long.to_csv(out_post_loop, index=False)
                 print(f"  -> Generated {out_post_loop.name}")
         

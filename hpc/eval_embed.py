@@ -2,20 +2,13 @@
 embedding.py 
 
 Generates embeddings for individual subjects using the trained End-to-End TeSBI model.
-This script extracts the 128-dimensional embedding (context) and the trial-to-trial 
-variability (std of latents) without running the final Normalizing Flow (Zuko) part.
-
-================================================================================
-USAGE & CONFIGURATION
-================================================================================
-Ensure this script is in the same directory level as `tesbi_e2e_6p_v1.py` so it 
-can import the model architecture correctly.
 """
 
 import os
 import argparse
 import sys
 import warnings
+import importlib
 from pathlib import Path
 
 import torch
@@ -23,77 +16,75 @@ import torch.nn as nn
 import pandas as pd
 import numpy as np
 
-# ==============================================================================
-# CONFIGURATION & PATHS
-# ==============================================================================
-RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
+# =============================================================================
+# 0. ARGUMENT PARSING (DEMO vs PROD MODE)
+# =============================================================================
+parser = argparse.ArgumentParser(description="Generate Embeddings using End-to-End Model")
+parser.add_argument(
+    '--prod', 
+    action='store_true', 
+    help='Run in PROD mode using local raw data. Defaults to DEMO mode if omitted.'
+)
+args, unknown = parser.parse_known_args()
 
-# --- OPTION A: HPC Production Configuration (Recommended) ---
-# from tesbi_e2e_6p_v1 import EndToEndTeSBI, PARAM_ORDER 
-# from utils.preprocessing import preprocessing
+DEMO_MODE = not args.prod
 
-# BASE_DIR = Path('/u/wenwang/data/')
-# OUT_DIR = Path('/u/wenwang/outputs/')
-# DEFAULT_DATA_DIR = BASE_DIR / "sst_valid_base"
-# DEFAULT_META_CSV = BASE_DIR / "clinical_behavior.csv"
-# # DEFAULT_MODEL_PATH = OUT_DIR / "amortized_inference_net_6p_v1.pth"
-# DEFAULT_MODEL_PATH="/u/wenwang/my_ptmp/10331248/outputs/amortized_inference_net_6p_v1.pth"
-# DEFAULT_OUT_CSV = OUT_DIR / "embeddings_e2e_6p_v1.csv"
-# USE_PREPROCESSING = True  
-
-
-# --- OPTION B: Local Testing Configuration ---
+# =============================================================================
+# 1. CONFIGURATION & PATHS
+# =============================================================================
 CURRENT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = CURRENT_DIR.parent
-sys.path.append(str(PROJECT_ROOT))
+REPO_ROOT = CURRENT_DIR.parent
+sys.path.append(str(REPO_ROOT))
 
-from outputs_example.tesbi.model_spec.tesbi_e2e_6p_v1 import EndToEndTeSBI, PARAM_ORDER 
-from utils.preprocessing import preprocessing
+# Ensure utils can be imported
+try:
+    from utils.preprocessing import preprocessing
+except ImportError as e:
+    print(f"Import error: {e}. Please ensure you are running from the correct directory.")
+    sys.exit(1)
 
-DEFAULT_DATA_DIR = PROJECT_ROOT / "data" / "example_processed_data"
-DEFAULT_META_CSV = PROJECT_ROOT / "data" / "example_clinical_behavior.csv"
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "outputs_example" / "tesbi" / "amortized_inference_net_6p_v1.pth"
-DEFAULT_OUT_CSV = PROJECT_ROOT / "outputs_example" / "tesbi" / "example_embeddings_6p_v1.csv"
-USE_PREPROCESSING = False 
+if DEMO_MODE:
+    print(">>> RUNNING IN DEMO MODE (Using example data) <<<")
+    DATA_DIR = REPO_ROOT / "data" / "example_processed_data"
+    META_CSV = REPO_ROOT / "data" / "example_clinical_behavior.csv"
+    MODEL_MODULE = "outputs_example.tesbi.model_spec.tesbi_e2e_6p_v1"
+    MODEL_PATH = REPO_ROOT / "outputs_example" / "tesbi" / "amortized_inference_net_6p_v1.pth"
+    OUT_CSV = REPO_ROOT / "outputs_example" / "tesbi" / "example_embeddings_6p_v1.csv"
+    USE_PREPROCESSING = False
+else:
+    print(">>> RUNNING IN PROD MODE (Using local raw data) <<<")
+    DATA_DIR = Path("/Users/w/Desktop/data/sst_valid_base")
+    META_CSV = Path("/Users/w/sst-pomdp/data/clinical_behavior.csv")
+    MODEL_MODULE = "tesbi_e2e_6p_v1" 
+    MODEL_PATH = Path("/Users/w/sst-pomdp/outputs/tesbi/amortized_inference_net_6p_v1.pth")
+    OUT_CSV = Path("/Users/w/sst-pomdp/outputs/tesbi/model_posteriors/embeddings_e2e_tesbi_e2e_6p_v1.csv")
+    USE_PREPROCESSING = True
 
+OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
 
 # ==============================================================================
 # EMBEDDING EXTRACTOR (The Wrapper)
 # ==============================================================================
 class EmbeddingExtractor(nn.Module):
-    """
-    Wraps the trained EndToEndTeSBI model to intercept the forward pass 
-    right before the Zuko flow. It extracts:
-    1. context (z_mean): The 128-dim subject-level embedding.
-    2. h_std: The trial-to-trial variability across the latent dimension.
-    """
-    def __init__(self, base_model: EndToEndTeSBI):
+    def __init__(self, base_model):
         super().__init__()
         self.base_model = base_model
 
     def forward(self, x_seq):
-        # 1. Linear projection and positional encoding
         h = self.base_model.proj(x_seq)
         h = self.base_model.pe(h)
-        
-        # 2. Transformer encoder (Extract sequence features)
-        h = self.base_model.encoder(h) # Shape: (Batch, Trials, 128)
-        
-        # 3. Extract trial-to-trial variability (Trial-level Std)
-        h_std_latents = h.std(dim=1)   # Shape: (Batch, 128)
-        
-        # 4. Temporal mean pooling and Context Head (Subject-level Embedding)
+        h = self.base_model.encoder(h) 
+        h_std_latents = h.std(dim=1)   
         h_mean = h.mean(dim=1)
-        context = self.base_model.context_head(h_mean) # Shape: (Batch, 128)
+        context = self.base_model.context_head(h_mean) 
         
         return context, h_std_latents
-
 
 # ==============================================================================
 # FEATURE ENGINEERING
 # ==============================================================================
 def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
-    """Constructs per-trial feature vectors (N_trials x Features)."""
     N = len(df)
     idx_map = {k: i for i, k in enumerate(RESULT_LEVELS)}
 
@@ -128,76 +119,64 @@ def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
 
     return np.concatenate(cols, axis=1).astype(np.float32)
 
-
 # ==============================================================================
 # MAIN EXECUTION
 # ==============================================================================
 def main():
     warnings.filterwarnings("ignore")
     
-    parser = argparse.ArgumentParser(description="Generate Embeddings using End-to-End Model")
-    parser.add_argument("--csv", type=str, default=str(DEFAULT_META_CSV), help="Input CSV with metadata")
-    parser.add_argument("--folder", type=str, default=str(DEFAULT_DATA_DIR), help="Folder containing subject data")
-    parser.add_argument("--model_path", type=str, default=str(DEFAULT_MODEL_PATH), help="Path to trained .pth")
-    parser.add_argument("--out", type=str, default=str(DEFAULT_OUT_CSV), help="Output CSV filename")
-    args = parser.parse_args()
+    # --- 1. Dynamic Module Import ---
+    print(f"[Init] Loading model specification from: {MODEL_MODULE}")
+    m = importlib.import_module(MODEL_MODULE)
+    EndToEndTeSBI = m.EndToEndTeSBI
+    PARAM_ORDER = m.PARAM_ORDER
 
-    # --- 1. Load Subject List ---
-    csv_path = Path(args.csv)
-    if not csv_path.exists():
-        raise FileNotFoundError(f"Metadata CSV not found: {csv_path}")
+    # --- 2. Load Subject List ---
+    if not META_CSV.exists():
+        raise FileNotFoundError(f"Metadata CSV not found: {META_CSV}")
     
-    df_meta = pd.read_csv(csv_path)
+    df_meta = pd.read_csv(META_CSV)
     target_files = set(df_meta["filename"].dropna().unique())
     print(f"Found {len(target_files)} target files. Preprocessing Enabled: {USE_PREPROCESSING}")
 
-    # --- 2. Initialize Model & Device ---
+    # --- 3. Initialize Model & Device ---
     device = torch.device("cpu")
     extractor = None 
     results = []
     
-    data_folder = Path(args.folder)
     count_ok, count_miss, count_err = 0, 0, 0
 
     for fname in target_files:
-        fpath = data_folder / fname
+        fpath = DATA_DIR / fname
         if not fpath.exists():
             count_miss += 1; continue
 
         try:
-            # Preprocess data
             df_subj = preprocessing(str(fpath)) if USE_PREPROCESSING else pd.read_csv(fpath)
             X = build_per_trial_features(df_subj)
             
-            # Dynamically initialize the model (first iteration only)
             if extractor is None:
                 in_dim = X.shape[1]
-                param_dim = len(PARAM_ORDER) # Dynamically get parameter dimension
+                param_dim = len(PARAM_ORDER) 
                 
-                # Initialize the full base model
                 base_model = EndToEndTeSBI(in_dim=in_dim, param_dim=param_dim)
-                model_file = Path(args.model_path)
                 
-                if not model_file.exists():
-                     raise FileNotFoundError(f"Model weights not found at {model_file}")
+                if not MODEL_PATH.exists():
+                     raise FileNotFoundError(f"Model weights not found at {MODEL_PATH}")
                 
-                # Load weights
-                base_model.load_state_dict(torch.load(model_file, map_location=device, weights_only=True))
+                base_model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
                 base_model.eval()
                 
-                # Wrap it as a feature extractor
                 extractor = EmbeddingExtractor(base_model).to(device)
-                print(f"Extractor ready. Loaded E2E model from {model_file.name}")
+                print(f"Extractor ready. Loaded E2E model from {MODEL_PATH.name}")
 
-            # --- Core Inference Step ---
-            X_t = torch.tensor(X[None, ...], dtype=torch.float32).to(device) # (1, T, F)
+            X_t = torch.tensor(X[None, ...], dtype=torch.float32).to(device) 
             
             with torch.no_grad():
                 z_mean, h_std = extractor(X_t)
-                z_vec = z_mean.squeeze(0).cpu().numpy()      # 128-dim Context Embedding
-                h_std_vec = h_std.squeeze(0).cpu().numpy()   # 128-dim Latent Std
+                z_vec = z_mean.squeeze(0).cpu().numpy()      
+                h_std_vec = h_std.squeeze(0).cpu().numpy()   
             
-            # --- Compile Results ---
             meta_row = df_meta[df_meta["filename"] == fname].iloc[0]
             sid = meta_row.get("subject_id", "unknown")
             year = meta_row.get("year", "unknown")
@@ -211,7 +190,6 @@ def main():
                 "trial_latents_mean_std": float(np.mean(h_std_vec)) 
             }
             
-            # Save the 128-dimensional features
             for i, val in enumerate(z_vec):
                 row[f"emb_{i}"] = val
             
@@ -225,13 +203,11 @@ def main():
             print(f"[Error] {fname}: {e}")
             count_err += 1
 
-    # --- 3. Save Results ---
+    # --- 4. Save Results ---
     if results:
         df_out = pd.DataFrame(results)
-        out_path = Path(args.out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        df_out.to_csv(out_path, index=False)
-        print(f"\nDone. Saved 128-dim embeddings for {len(df_out)} subjects to {out_path.name}")
+        df_out.to_csv(OUT_CSV, index=False)
+        print(f"\nDone. Saved 128-dim embeddings for {len(df_out)} subjects to {OUT_CSV.name}")
         print(f"Stats: OK={count_ok}, Missing={count_miss}, Error={count_err}")
     else:
         print("\nWarning: No results generated.")

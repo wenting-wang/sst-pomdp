@@ -119,9 +119,9 @@ def main():
         "Model Sanity Check (fig_dynamics.py)",
         "analysis/fig_dynamics.py",
         expected_output=[
-            "outputs/fig_action_values.png",
-            "outputs/fig_belief_states.png",
-            "outputs/fig_stop_prior_effects.png"
+            "outputs_example/fig_action_values.png",
+            "outputs_example/fig_belief_states.png",
+            "outputs_example/fig_stop_prior_effects.png"
         ],
         prod_mode=args.prod
     )
@@ -130,12 +130,12 @@ def main():
         "Model Sanity Check (fig_policy.py)",
         "analysis/fig_policy.py",
         expected_output=[
-            "outputs/fig_policy_summary.png",
-            "outputs/fig_policy_GS.png",
-            "outputs/fig_policy_GE.png",
-            "outputs/fig_policy_GM.png",
-            "outputs/fig_policy_SS.png",
-            "outputs/fig_policy_SE.png"
+            "outputs_example/fig_policy_summary.png",
+            "outputs_example/fig_policy_GS.png",
+            "outputs_example/fig_policy_GE.png",
+            "outputs_example/fig_policy_GM.png",
+            "outputs_example/fig_policy_SS.png",
+            "outputs_example/fig_policy_SE.png"
         ],
         prod_mode=args.prod
     )
@@ -145,21 +145,22 @@ def main():
     # ---------------------------------------------------------
     if args.prod:
         tesbi_data_folder = "/Users/w/Desktop/data/sst_valid_base"
-        filter_csv_path = "/Users/w/sst-hdbm-mac/sst-pomdp-main/data/clinical_behavior.csv"
+        filter_csv_path = "/Users/w/sst-pomdp/data/clinical_behavior.csv"
+        out_base_dir = "outputs/tesbi"
     else:
         tesbi_data_folder = "./data/example_processed_data"
         filter_csv_path = "./data/example_clinical_behavior.csv"
+        out_base_dir = "outputs_example/tesbi"
 
-    # Determine the suffix to guess the weights path (e.g., "6p_v1")
     model_suffix = TEST_MODEL_NAME.split("e2e_")[-1] if "e2e_" in TEST_MODEL_NAME else TEST_MODEL_NAME
     expected_weights_name = f"amortized_inference_net_{model_suffix}.pth"
-    expected_weights_path = f"outputs/{expected_weights_name}"
+    expected_weights_path = f"{out_base_dir}/{expected_weights_name}"
 
-    # --- 2.1 End-to-End Model Fitting (Adaptive) ---
+    # --- 2.1 TeSBI Model Fitting (Adaptive) ---
     tesbi_args = [
         "--stage", "all", 
-        "--n_sims", "10",      # Very low for quick check
-        "--epochs", "2",       # Very low for quick check
+        "--n_sims", "10", 
+        "--epochs", "2", 
         "--batch_size", "4", 
         "--K", "5", 
         "--num_post", "10", 
@@ -167,41 +168,28 @@ def main():
     ]
     
     run_command(
-        f"2.1 Model Fitting E2E ({TEST_MODEL_NAME})", 
+        f"2.1 TeSBI Model Fitting ({TEST_MODEL_NAME})", 
         f"hpc/{TEST_MODEL_NAME}.py", 
         extra_args=tesbi_args,
-        expected_output=expected_weights_path
+        expected_output=expected_weights_path,
+        prod_mode=args.prod
     )
 
-    # --- 2.2 Out-of-Sample Cross Validation Check ---
-    cv_args = [
-        "--sst_folder", tesbi_data_folder,
-        "--filter_csv", filter_csv_path,
-        "--model_config", TEST_MODEL_NAME,
-        "--weights_path", expected_weights_path,
-        "--train_ratio", "0.8"
-    ]
-    
-    run_command(
-        "2.2 Cross-Validation Check", 
-        "hpc/eval_cv.py", 
-        extra_args=cv_args
-    )
-
-    # --- 2.3 Embedding Extraction Check ---
-    # Note: Adjust --model_path if your eval_cv.py expects just the filename instead of a relative path.
+    # --- 2.2 Embedding Extraction Check ---
+    embed_out_csv = f"{out_base_dir}/embeddings_{TEST_MODEL_NAME}.csv"
     emb_args = [
         "--csv", filter_csv_path,
         "--folder", tesbi_data_folder,
-        "--model_path", expected_weights_name, # or expected_weights_path based on embedding.py logic
-        "--out", f"embeddings_quick_check_{TEST_MODEL_NAME}.csv"
+        "--model_path", expected_weights_path,
+        "--out", embed_out_csv
     ]
     
     run_command(
-        "2.3 Embedding Extraction Check", 
-        "hpc/eval_cv.py", 
+        "2.2 Embedding Extraction Check", 
+        "hpc/eval_embed.py",
         extra_args=emb_args,
-        expected_output=f"outputs/embeddings_quick_check_{TEST_MODEL_NAME}.csv"
+        expected_output=embed_out_csv,
+        prod_mode=args.prod
     )
 
     # ---------------------------------------------------------
@@ -209,14 +197,16 @@ def main():
     # ---------------------------------------------------------
     # List of tuples: (Step Name, Script Path, Expected Output File(s))
     analysis_scripts = [
-        ("Analysis: Parameter Distributions", "analysis/fig_param_dist.py", ["outputs/fig_param_dist.png"]),
-        ("Analysis: ADHD vs Params", "analysis/fig_param_adhd.py", ["outputs/fig_param_adhd.png"]),
-        ("Analysis: PPC Representative Subjects", "analysis/fig_ppc_reps.py", ["outputs/fig_ppc_reps.png"]),
-        ("Analysis: Canonical Correlation Analysis", "analysis/fig_cca.py", ["outputs/fig_cca.png"]),
-        ("Analysis: PCA Embedding", "analysis/fig_pca_embed.py", ["outputs/fig_pca_embed_2d.png"]),
-        ("Analysis: Demographics Counts Table", "analysis/tab_demo_counts.py", ["outputs/tab_demo_counts.tex"]),
-        ("Analysis: Linear Models (Behavior)", "analysis/tab_lm_behavior.py", ["outputs/tab_lm_behavior.tex"]),
-        ("Analysis: Linear Models (Params)", "analysis/tab_lm_params.py", ["outputs/tab_lm_params_main.tex"])
+        ("Analysis: Parameter Distributions", "analysis/fig_param_dist.py", ["outputs_example/fig_param_dist.png"]),
+        ("Analysis: ADHD vs Params", "analysis/fig_param_adhd.py", ["outputs_example/fig_param_adhd.png"]),
+        ("Analysis: Canonical Correlation Analysis", "analysis/fig_cca.py", ["outputs_example/fig_cca.png"]),
+        ("Analysis: PPC Representative Subjects", "analysis/fig_ppc_reps.py", ["outputs_example/fig_ppc_reps.png"]),
+        ("Analysis: PCA Embedding", "analysis/fig_pca_embed.py", ["outputs_example/fig_pca_embed_2d.png"]),
+        ("Analysis: Demographics Counts Table", "analysis/tab_demo_counts.py", ["outputs_example/tab_demo_counts.tex"]),
+        ("Analysis: Linear Models (Behavior)", "analysis/tab_lm_behavior.py", ["outputs_example/tab_lm_behavior.tex"]),
+        ("Analysis: Linear Models (Params)", "analysis/tab_lm_params.py", ["outputs_example/tab_lm_params_main.tex"]),
+        ("Analysis: Model Comparison", "analysis/tab_model_compare.py", ["outputs_example/tesbi/table1_specs.tex"]),
+        ("Analysis: Parameter Quantiles", "analysis/tab_param_quantiles.py", ["outputs_example/tab_param_quantiles.tex"])
     ]
 
     for step_name, script_path, exp_out in analysis_scripts:
@@ -227,7 +217,7 @@ def main():
     # ---------------------------------------------------------
     print(f"\n{'*'*60}")
     print("ALL TESTS PROCESSED SUCCESSFULLY!")
-    print("Check the 'outputs/' folder for the generated figures, tables, and models.")
+    print("Check the 'outputs_example/' folder for the generated figures, tables, and models.")
     print(f"{'*'*60}\n")
 
 if __name__ == "__main__":

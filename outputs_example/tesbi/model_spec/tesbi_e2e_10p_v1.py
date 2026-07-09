@@ -1,8 +1,8 @@
 """
-tesbi_e2e_7param.py 
+tesbi_e2e_10p_v1.py 
 
-7-Parameter End-to-End TeSBI Pipeline.
-- Freed 3 additional parameters: cost_time, cost_go_error, cost_go_missing (Total 7).
+10-Parameter End-to-End TeSBI Pipeline.
+- Freed 6 additional parameters: cost_time, cost_go_error, cost_go_missing, q_d_n, q_s_n, inv_temp (Total 10).
 - Upgraded Architecture: d_model=128, n_layers=4, Zuko hidden=[256, 256].
 - Default N_SIMS = 100,000.
 """
