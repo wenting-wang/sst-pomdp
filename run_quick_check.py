@@ -121,7 +121,7 @@ def main():
         expected_output=[
             "outputs_example/fig_action_values.png",
             "outputs_example/fig_belief_states.png",
-            "outputs_example/fig_stop_prior_effects.png"
+            "outputs_example/fig_stop_prior_sensitivity.png"
         ],
         prod_mode=args.prod
     )
@@ -143,22 +143,18 @@ def main():
     # ---------------------------------------------------------
     # Step 2: TeSBI HPC Workflow (Lightweight Quick Run)
     # ---------------------------------------------------------
-    if args.prod:
-        tesbi_data_folder = "/Users/w/Desktop/data/sst_valid_base"
-        filter_csv_path = "/Users/w/sst-pomdp/data/clinical_behavior.csv"
-        out_base_dir = "outputs/tesbi"
-    else:
-        tesbi_data_folder = "./data/example_processed_data"
-        filter_csv_path = "./data/example_clinical_behavior.csv"
-        out_base_dir = "outputs_example/tesbi"
+    tesbi_data_folder = "./data/example_processed_data"
+    filter_csv_path = "./data/example_clinical_behavior.csv"
+    out_base_dir = "outputs_example/tesbi"
 
     model_suffix = TEST_MODEL_NAME.split("e2e_")[-1] if "e2e_" in TEST_MODEL_NAME else TEST_MODEL_NAME
-    expected_weights_name = f"amortized_inference_net_{model_suffix}.pth"
+    
+    expected_weights_name = f"test_amortized_inference_net_{model_suffix}.pth"
     expected_weights_path = f"{out_base_dir}/{expected_weights_name}"
 
     # --- 2.1 TeSBI Model Fitting (Adaptive) ---
     tesbi_args = [
-        "--stage", "all", 
+        "--stage", "all",
         "--n_sims", "10", 
         "--epochs", "2", 
         "--batch_size", "4", 
@@ -171,12 +167,11 @@ def main():
         f"2.1 TeSBI Model Fitting ({TEST_MODEL_NAME})", 
         f"hpc/{TEST_MODEL_NAME}.py", 
         extra_args=tesbi_args,
-        expected_output=expected_weights_path,
-        prod_mode=args.prod
+        expected_output=expected_weights_path
     )
 
     # --- 2.2 Embedding Extraction Check ---
-    embed_out_csv = f"{out_base_dir}/embeddings_{TEST_MODEL_NAME}.csv"
+    embed_out_csv = f"{out_base_dir}/test_embeddings_{TEST_MODEL_NAME}.csv"
     emb_args = [
         "--csv", filter_csv_path,
         "--folder", tesbi_data_folder,
@@ -188,8 +183,7 @@ def main():
         "2.2 Embedding Extraction Check", 
         "hpc/eval_embed.py",
         extra_args=emb_args,
-        expected_output=embed_out_csv,
-        prod_mode=args.prod
+        expected_output=embed_out_csv
     )
 
     # ---------------------------------------------------------
@@ -204,9 +198,17 @@ def main():
         ("Analysis: PCA Embedding", "analysis/fig_pca_embed.py", ["outputs_example/fig_pca_embed_2d.png"]),
         ("Analysis: Demographics Counts Table", "analysis/tab_demo_counts.py", ["outputs_example/tab_demo_counts.tex"]),
         ("Analysis: Linear Models (Behavior)", "analysis/tab_lm_behavior.py", ["outputs_example/tab_lm_behavior.tex"]),
-        ("Analysis: Linear Models (Params)", "analysis/tab_lm_params.py", ["outputs_example/tab_lm_params_main.tex"]),
-        ("Analysis: Model Comparison", "analysis/tab_model_compare.py", ["outputs_example/tesbi/table1_specs.tex"]),
-        ("Analysis: Parameter Quantiles", "analysis/tab_param_quantiles.py", ["outputs_example/tab_param_quantiles.tex"])
+        ("Analysis: Linear Models (Params)", "analysis/tab_lm_params.py", [
+            "outputs_example/tab_lm_params_main.tex", 
+            "outputs_example/tab_lm_params_supp.tex"
+        ]),
+        ("Analysis: Model Comparison", "analysis/tab_model_compare.py", [
+            "outputs_example/tesbi/table1_specs.tex",
+            "outputs_example/tesbi/table2_ppc.tex",
+            "outputs_example/tesbi/table3_recovery.tex",
+            "outputs_example/tesbi/table4_cv.tex"
+        ]),
+        ("Analysis: Parameter Quantiles", "analysis/tab_param_quantiles.py", ["outputs_example/tab_param_quantiles.csv"])
     ]
 
     for step_name, script_path, exp_out in analysis_scripts:
