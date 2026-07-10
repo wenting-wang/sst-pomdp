@@ -18,6 +18,10 @@ This code is structured to allow for easy environment setup, local testing, and 
   <img src="img/sst.png" width="100%" alt="SST-POMDP Model Architecture">
 </p>
 
+<p align="center">
+  <img src="img/parameters_adhd.png" width="80%" alt="SST-POMDP Parameters">
+</p>
+
 
 ## Quick Start
 
