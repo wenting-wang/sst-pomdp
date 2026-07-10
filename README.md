@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This repository contains the code for the research work [Decomposing response inhibition: a POMDP model](link here when published). It provides a comprehensive framework to formalize and parameterize the within-trial cognitive processes underlying the Stop Signal Task (SST), specifically tailored to the Adolescent Brain Cognitive Development (ABCD) study design.
+This repository contains the code for the research work [Decomposing response inhibition: a POMDP model](https://doi.org/10.64898/2026.02.26.708416). It provides a comprehensive framework to formalize and parameterize the within-trial cognitive processes underlying the Stop Signal Task (SST), specifically tailored to the Adolescent Brain Cognitive Development (ABCD) study design.
 
 The repository includes:
 * **Data Processing:** Full pipelines for filtering, cleaning, and formatting behavioral data.
@@ -56,7 +56,9 @@ pip install -r requirements.txt
 python run_quick_check.py
 ```
 
-If successful, the script will output `ALL TESTS PASSED SUCCESSFULLY!` and you can view the generated figures and tables in the `outputs/` folder.
+If successful, the script will output `ALL TESTS PASSED SUCCESSFULLY!`.
+
+Note on verification: You can compare your locally generated test files in outputs_example/ against the ground-truth reference files pre-compiled inside the outputs_example_expected/ directory to ensure perfect alignment.
 
 
 ## Detailed Guide
@@ -72,6 +74,7 @@ If you have the raw datasets, you can run the quality control and filtering step
 python utils/01_qc_filter.py
 python utils/02_qc_report.py
 python utils/03_build_dataset.py
+python utils/04_demo_report.py
 ```
 
 ### Step 2: Model Sanity Check
@@ -83,14 +86,14 @@ Before fitting data, verify that the core POMDP model simulates dynamics of with
 python analysis/fig_dynamics.py
 ```
 
-**Expected Output:** `fig_belief_states.png`, `fig_action_value.png`, and `fig_stop_prior_effects.png` plots saved in the `outputs/` folder.
+**Expected Output:** `fig_belief_states.png`, `fig_action_value.png`, and `fig_stop_prior_sensitivity.png` plots saved in the `outputs_example/` folder.
 
 ```bash
 # Generates the softmax policy figures
 python analysis/fig_policy.py
 ```
 
-**Expected Output:** `fig_policy_summary.png`, `fig_policy_GS.png`, `fig_policy_GE.png`, `fig_policy_GM.png`, `fig_policy_SS.png`, and `fig_policy_SE.png` plots saved in the `outputs/` folder.
+**Expected Output:** `fig_policy_summary.png`, `fig_policy_GS.png`, `fig_policy_GE.png`, `fig_policy_GM.png`, `fig_policy_SS.png`, and `fig_policy_SE.png` plots saved in the `outputs_example/` folder.
 
 ### Step 3: Model Fitting
 
@@ -100,24 +103,17 @@ The main parameter inference pipeline uses a Transformer encoder and a SNPE neur
 sbatch slurm/run_tesbi.sh
 ```
 
-Note: To test a fast version of this locally, use the arguments provided inside `run_quick_check.py`.
+Note: To test a fast version of this locally, `run_quick_check.py` invokes `hpc/test_tesbi_e2e_6p_v1.py` with minimal epochs. This lightweight check generates a partially-trained network saved with a test_ prefix (e.g., `test_amortized_inference_net_6p_v1.pth`).
 
-The TeSBI pipeline operates in four stages:
+The end-to-end TeSBI pipeline includes several stages:
 
-1. **Pretrain** a Transformer encoder to learn patterns in sequential behavior.
-2. **Train** a Sequential Neural Posterior Estimation (SNPE) network to learn the mapping between parameters and behavior.
-3. **Parameter Recovery** to validate the inference method on simulated ground truth data.
-4. **Parameter Inference** to extract the final subject-level parameters from observed trial-level behavior.
+- Amortized Training: Learns a direct mapping from sequential, trial-level behavioral choices into continuous parameter densities using a Transformer encoder combined with a Neural Spline Flow (NSF) network architecture.
 
-To further validate the inference methods alongside parameter recovery, you can extract the latent behavioral embeddings (using the pretrained encoder) and run posterior predictive checks (using the trained posterior):
+- Posterior Inference: Rapidly samples individual subject-level parameters from observed behavioral matrices using the pretrained network.
 
-```bash
-# Extract latent behavioral embeddings
-sbatch slurm/run_embedding.sh
+- Parameter Recovery: An integrated validation loop that test parameter identifiability.
 
-# Run posterior predictive checks
-sbatch slurm/run_ppc.sh
-```
+For large-scale cross-validation or embedding extraction on cluster environments, you can directly deploy the corresponding cluster scripts such as `hpc/run_cv.sh` or `hpc/run_embed.sh`.
 
 ### Step 4: Results Analysis
 
@@ -127,37 +123,38 @@ Once the model is fit, or by using the pre-supplied example data in the `data/` 
 # Generate the parameter distribution figure
 python analysis/fig_param_dist.py
 
-# Run linear models to show relationship between model parameters and clinical traits
-python analysis/tab_lm_params.py
-
-# Run posterior predictive checks (three representative subjects)
-python analysis/fig_ppc_reps.py
-
-# Run posterior predictive checks (all subjects)
-python analysis/fig_ppc_population.py
+# Compare ADHD traits vs Model Parameters
+python analysis/fig_param_adhd.py
 
 # Run canonical correlation analysis (CCA)
 python analysis/fig_cca.py
 
-# Run PCA of latent behavioral embeddings analysis
+# Run posterior predictive checks (representative subjects)
+python analysis/fig_ppc_reps.py
+
+# Run PCA of latent behavioral embeddings analysis (2D)
 python analysis/fig_pca_embed.py
-
-# Generate parameter recovery analysis
-python analysis/fig_params_recovery.py
-
-# Run sensitivity analysis for marginal effect of parameters
-python analysis/fig_sensitivity.py
 
 # Generate demographics counts table (i.e., ADHD trait, sex, IQ, medication)
 python analysis/tab_demo_counts.py
 
 # Run linear models (behavior across demographics)
-python analysis/tabl_lm_behavior.py
+python analysis/tab_lm_behavior.py
 
+# Run linear models to show relationship between model parameters and clinical traits
+python analysis/tab_lm_params.py
+
+# Run comprehensive model comparison
+python analysis/tab_model_compare.py
+
+# Generate parameter quantiles
+python analysis/tab_param_quantiles.py
 ```
 
-**Expected Output:** Final `.png` figures and `.tex` tables saved directly to the `outputs/` directory.
+**Expected Output:** Final `.png` figures and `.tex/.csv` tables saved directly to the `outputs_example/` directory (with some results routed to `outputs_example/tesbi/`).
 
+**Important Architectural Note on Pre-supplied Data**:
+The files and directories pre-packaged inside `/outputs_example/tesbi/` (specifically `amortized_inference_net_6p_v1.pth`, `example_ppc_metrics_6p_v1.csv`, `model_cv`, `model_posteriors`, `model_ppc`, `model_recovery`, and `model_spec`) represent actual full production-grade results extracted from a fully trained pipeline via `example_data_generator.py`. They are provided out-of-the-box so that the downstream analysis scripts (`analysis/*.py`) can execute immediately with high-fidelity scientific data. They are not the output of the local quick check test process, which intentionally runs an incomplete, lightweight training session to verify environment sanity.
 
 ## Project Structure
 
@@ -173,20 +170,24 @@ The repository is divided into modular folders separating the core computational
 
 * **`data/`**: Contains mock data in `example_processed_data/` and mock summary `.csv` files to allow users to test the analysis scripts without needing the raw, restricted clinical dataset.
 
-* **`hpc/`**: Heavy computational pipelines for model fitting.
-  * `tesbi.py`: The end-to-end TeSBI pipeline.
-  * `embedding.py`: Extracts subject-level summary embeddings using the trained Transformer.
-  * `ppc.py`: Posterior Predictive Checks (PPC).
+**`hpc/`**: Heavy computational and estimation pipelines designed for cluster environments.
 
-* **`outputs/`**: Destination folders for generated plots, models, and tables.
+- `run_tesbi.sh`: Core submission bash script used to test and train specific model configurations on `SLURM` by defining variables like `MODEL_FILE="tesbi_e2e_6p_v1"`, which dynamically links architecture details from `outputs_example/tesbi/model_spec/`.
 
-* **`slurm/`**: Bash scripts (`run_tesbi.sh`, `run_ppc.sh`, etc.) for submitting `hpc/` tasks to an HPC cluster.
-  
+- `run_cv.sh`: Main script for cross-validation runs to perform statistical model comparison across candidate parameter sets.
+
+- `run_embed.sh`: Extract high-dimensional latent sequential behavioral embeddings using the optimized network configuration.
+
+- `eval_*.py` & `plot_*.py`: Auxiliary code and plotting modules serving as background engines during model evaluation, validation checks, and diagnostic plots.
+
+**`outputs_example/`**: Active directory for runtime test artifacts. It contains pre-supplied full production-grade models and tracking files mapped via `example_data_generator.py`. Local verification tests write separate checking files marked with a `test_` prefix (e.g., `test_amortized_inference_net_6p_v1.pth`).
+
+**`outputs_example_expected/`**: Reference directory containing frozen ground-truth targets (figures, tables, metrics) reflecting a perfect, full production execution on the mock datasets. Following a successful `run_quick_check.py` run, the files created in `outputs_example/` should perfectly mirror the corresponding records here.
+
 * **`utils/`**: Data processing, quality control, and system checks.
-  * `01_qc_filter.py`, `02_qc_report.py`, `03_build_dataset.py`: Pipelines for filtering raw data and building analysis datasets.
+  * `01_qc_filter.py`, `02_qc_report.py`, `03_build_dataset.py`, `04_demo_report.py`: Pipelines for filtering raw data and building analysis datasets.
   * `preprocessing.py`: Trial-level data cleaning and formatting.
   * `metrics.py`: Extract behavioral metrics.
-  * `check_gpu.py`: Utility to verify CUDA/GPU availability.
 * `environment.yml`: Environment setup file to install necessary dependencies.
 
 
@@ -194,8 +195,7 @@ The repository is divided into modular folders separating the core computational
 
 For full theoretical details, mathematical derivations, and comprehensive results, please refer to our paper: 
 
-[citation/link here when published]
-
+[Wang, Wenting, Tobias Kaufmann, and Peter Dayan. "Decomposing response inhibition: a POMDP model." bioRxiv (2026): 2026-02.](https://doi.org/10.64898/2026.02.26.708416)
 
 ## Contact
 
