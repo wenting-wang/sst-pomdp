@@ -165,13 +165,13 @@ def main():
     
     run_command(
         f"2.1 TeSBI Model Fitting ({TEST_MODEL_NAME})", 
-        f"hpc/{TEST_MODEL_NAME}.py", 
+        f"hpc/test_{TEST_MODEL_NAME}.py", 
         extra_args=tesbi_args,
         expected_output=expected_weights_path
     )
 
     # --- 2.2 Embedding Extraction Check ---
-    embed_out_csv = f"{out_base_dir}/test_embeddings_{TEST_MODEL_NAME}.csv"
+    embed_out_csv = f"{out_base_dir}/example_embeddings_{model_suffix}.csv"
     emb_args = [
         "--csv", filter_csv_path,
         "--folder", tesbi_data_folder,
