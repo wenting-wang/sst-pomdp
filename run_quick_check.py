@@ -34,6 +34,9 @@ def run_command(step_name, script_path, extra_args=None, expected_output=None, p
         print(f"SKIPPED: {step_name}")
         print(f"Reason: Script '{script_path}' does not exist yet.")
         print(f"{'='*60}")
+        
+        sys.exit(1)
+        
         return True
 
     # 2. Skip if the outputs already exist (Caching to save time)
