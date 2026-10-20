@@ -27,12 +27,14 @@ This code is structured to allow for easy environment setup, local testing, and 
 </p>
 
 <p align="center">
-  <img src="img/Fig9.png" width="80%" alt="SST-POMDP Parameters">
+  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
 </p>
 
 <p align="center">
-  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
+  <img src="img/Fig9.png" width="80%" alt="SST-POMDP Parameters">
 </p>
+
+
 
 ## Quick Start
 
