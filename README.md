@@ -27,26 +27,6 @@ This code is structured to allow for easy environment setup, local testing, and 
 </p>
 
 <p align="center">
-  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
-</p>
-
-<p align="center">
-  <img src="img/Fig5.png" width="80%" alt="SST-POMDP Perceprion Simulation">
-</p>
-
-<p align="center">
-  <img src="img/Fig6.png" width="80%" alt="SST-POMDP Policy">
-</p>
-
-<p align="center">
-  <img src="img/Fig7.png" width="80%" alt="SST-POMDP Decision Simulation">
-</p>
-
-<p align="center">
-  <img src="img/Fig8.png" width="80%" alt="SST-POMDP Behaviour Recovery">
-</p>
-
-<p align="center">
   <img src="img/Fig9.png" width="80%" alt="SST-POMDP Parameters">
 </p>
 
@@ -232,5 +212,27 @@ For full theoretical details, mathematical derivations, and comprehensive result
 ## Contact
 
 If you have any concerns, have questions, or want to discuss the code, please feel free to open an issue on this repository or reach out directly:
+
+## Results
+
+<p align="center">
+  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
+</p>
+
+<p align="center">
+  <img src="img/Fig5.png" width="80%" alt="SST-POMDP Perceprion Simulation">
+</p>
+
+<p align="center">
+  <img src="img/Fig6.png" width="80%" alt="SST-POMDP Policy">
+</p>
+
+<p align="center">
+  <img src="img/Fig7.png" width="80%" alt="SST-POMDP Decision Simulation">
+</p>
+
+<p align="center">
+  <img src="img/Fig8.png" width="80%" alt="SST-POMDP Behaviour Recovery">
+</p>
 
 Wenting Wang (wenting.wang@tuebingen.mpg.de)
