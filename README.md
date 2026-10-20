@@ -199,7 +199,7 @@ The repository is divided into modular folders separating the core computational
 
 For full theoretical details, mathematical derivations, and comprehensive results, please refer to our paper: 
 
-[Wang, Wenting, Tobias Kaufmann, and Peter Dayan. "Decomposing response inhibition: a POMDP model." PLOS Computational Biology 22.9 (2026): e1014068.]([https://doi.org/10.64898/2026.02.26.708416](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1014068))
+[Wang, Wenting, Tobias Kaufmann, and Peter Dayan. "Decomposing response inhibition: a POMDP model." PLOS Computational Biology 22.9 (2026): e1014068.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1014068)
 
 ## Contact
 
