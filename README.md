@@ -30,6 +30,9 @@ This code is structured to allow for easy environment setup, local testing, and 
   <img src="img/Fig9.png" width="80%" alt="SST-POMDP Parameters">
 </p>
 
+<p align="center">
+  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
+</p>
 
 ## Quick Start
 
@@ -213,11 +216,9 @@ For full theoretical details, mathematical derivations, and comprehensive result
 
 If you have any concerns, have questions, or want to discuss the code, please feel free to open an issue on this repository or reach out directly:
 
-## Results
+Wenting Wang (wenting.wang@tuebingen.mpg.de)
 
-<p align="center">
-  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
-</p>
+## Result (examples)
 
 <p align="center">
   <img src="img/Fig5.png" width="80%" alt="SST-POMDP Perceprion Simulation">
@@ -235,4 +236,3 @@ If you have any concerns, have questions, or want to discuss the code, please fe
   <img src="img/Fig8.png" width="80%" alt="SST-POMDP Behaviour Recovery">
 </p>
 
-Wenting Wang (wenting.wang@tuebingen.mpg.de)
