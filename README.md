@@ -15,11 +15,39 @@ Crucially, this project focuses on the relationship between computational phenot
 This code is structured to allow for easy environment setup, local testing, and full High Performance Computing (HPC) deployment.
 
 <p align="center">
-  <img src="img/sst.png" width="100%" alt="SST-POMDP Model Architecture">
+  <img src="img/Fig1.png" width="100%" alt="SST-POMDP Experiment">
 </p>
 
 <p align="center">
-  <img src="img/parameters_adhd.png" width="80%" alt="SST-POMDP Parameters">
+  <img src="img/Fig2.png" width="80%" alt="SST-POMDP Perception Process">
+</p>
+
+<p align="center">
+  <img src="img/Fig3.png" width="80%" alt="SST-POMDP Decision Process">
+</p>
+
+<p align="center">
+  <img src="img/Fig4.png" width="80%" alt="SST-POMDP Model Fitting">
+</p>
+
+<p align="center">
+  <img src="img/Fig5.png" width="80%" alt="SST-POMDP Perceprion Simulation">
+</p>
+
+<p align="center">
+  <img src="img/Fig6.png" width="80%" alt="SST-POMDP Policy">
+</p>
+
+<p align="center">
+  <img src="img/Fig7.png" width="80%" alt="SST-POMDP Decision Simulation">
+</p>
+
+<p align="center">
+  <img src="img/Fig8.png" width="80%" alt="SST-POMDP Behaviour Recovery">
+</p>
+
+<p align="center">
+  <img src="img/Fig9.png" width="80%" alt="SST-POMDP Parameters">
 </p>
 
 
